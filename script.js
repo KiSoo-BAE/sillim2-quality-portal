@@ -40,6 +40,21 @@ const badgeMap = {
 
 const pageNumbers = Object.fromEntries(menuItems.map(([key, number]) => [key, number]));
 
+function iconSvg(id) {
+  const icons = {
+    home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h5v-6h2v6h5V10"/>',
+    readyMix: '<path d="M4 14h10l2 3h2"/><path d="M4 9h7l3 5"/><path d="M5 17a2 2 0 1 0 0.1 0M17 17a2 2 0 1 0 0.1 0"/><path d="M13 8l4-2 2 4-4 2z"/>',
+    materialArch: '<path d="M7 4h10v18H7z"/><path d="M10 4a2 2 0 0 1 4 0"/><path d="M10 10h4M10 14h6"/><path d="M9 18l2 2 5-6"/>',
+    materialCivil: '<path d="M5 17l10-10"/><path d="M8 20L18 10"/><path d="M4 13l7 7"/><path d="M10 6l7 7"/><path d="M14 4l6 6"/>',
+    materialLandscape: '<path d="M12 21V10"/><path d="M12 12c-5 0-7-3-7-7 5 0 7 3 7 7z"/><path d="M12 14c5 0 7-3 7-7-5 0-7 3-7 7z"/>',
+    compressive: '<path d="M12 3l8 4-8 4-8-4 8-4z"/><path d="M4 7v9l8 4 8-4V7"/><path d="M12 11v9"/>',
+    requestTest: '<path d="M10 3h4"/><path d="M11 3v6l-5 9a2 2 0 0 0 2 3h8a2 2 0 0 0 2-3l-5-9V3"/><path d="M8 16h8"/>',
+    nonconformity: '<path d="M12 3l7 4v6c0 4-3 7-7 8-4-1-7-4-7-8V7l7-4z"/><path d="M12 8v6"/><path d="M12 17h.01"/>',
+    dashboard: '<path d="M5 19V9"/><path d="M10 19V5"/><path d="M15 19v-8"/><path d="M20 19V3"/><path d="M3 19h19"/>'
+  };
+  return `<svg class="line-icon" viewBox="0 0 24 24" aria-hidden="true">${icons[id] || icons.dashboard}</svg>`;
+}
+
 function getBadgeClass(value) {
   return badgeMap[value] || "";
 }
@@ -161,12 +176,15 @@ function renderKpiCards(targetId) {
 function renderHomeKpis() {
   const kpi = getKpiSummary();
   renderKpiCards("mainKpis");
-  document.getElementById("heroMetrics").innerHTML = `
-    <div><span>자재승인</span><strong>${kpi.materialApprovalCount}</strong></div>
-    <div><span>의뢰시험 적합률</span><strong>${kpi.requestedFitRate}%</strong></div>
-    <div><span>부적합</span><strong>${kpi.ncrCount}</strong></div>
-    <div><span>조치완료율</span><strong>${kpi.completionRate}%</strong></div>
-  `;
+  const heroMetrics = document.getElementById("heroMetrics");
+  if (heroMetrics) {
+    heroMetrics.innerHTML = `
+      <div><span>자재승인</span><strong>${kpi.materialApprovalCount}</strong></div>
+      <div><span>의뢰시험 적합률</span><strong>${kpi.requestedFitRate}%</strong></div>
+      <div><span>부적합</span><strong>${kpi.ncrCount}</strong></div>
+      <div><span>조치완료율</span><strong>${kpi.completionRate}%</strong></div>
+    `;
+  }
 }
 
 function renderMenus() {
@@ -176,12 +194,23 @@ function renderMenus() {
       <a class="menu-card" href="#${id}" data-target="${id}">
         <b>${number}</b>
         <strong>${title}</strong>
-        <span>${desc}</span>
+        <span class="card-icon">${iconSvg(id)}</span>
         <em><i>${metricLabel}</i><mark>${metricValue}</mark></em>
         <small>착공 전 현장으로 등록된 데이터 없음</small>
       </a>
     `;
   }).join("");
+}
+
+function renderNavIcons() {
+  document.querySelectorAll(".nav-link").forEach(link => {
+    if (link.querySelector(".nav-icon")) return;
+    const target = link.dataset.target || "home";
+    const wrapper = document.createElement("span");
+    wrapper.className = "nav-icon";
+    wrapper.innerHTML = iconSvg(target);
+    link.prepend(wrapper);
+  });
 }
 
 function renderTodayRows() {
@@ -446,7 +475,6 @@ function drawDashboardCharts() {
 function showView(id) {
   document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === id));
   document.querySelectorAll(".nav-link").forEach(link => link.classList.toggle("active", link.dataset.target === id));
-  document.querySelector(".top-nav").classList.remove("open");
   window.scrollTo({ top: 0, behavior: "smooth" });
   if (id === "dashboard") setTimeout(renderDashboard, 80);
 }
@@ -486,6 +514,9 @@ function setupEvents() {
   document.querySelector(".menu-toggle").addEventListener("click", () => {
     document.querySelector(".top-nav").classList.toggle("open");
   });
+  document.querySelector(".menu-close")?.addEventListener("click", () => {
+    document.querySelector(".top-nav").classList.remove("open");
+  });
   window.addEventListener("resize", () => {
     if (document.getElementById("dashboard").classList.contains("active")) renderDashboard();
   });
@@ -496,12 +527,16 @@ function setupEvents() {
 }
 
 function init() {
+  renderNavIcons();
   renderHomeKpis();
   renderMenus();
   renderTodayRows();
   renderStatusPages();
   renderDashboard();
   setupEvents();
+  if (window.innerWidth < 980) {
+    document.querySelector(".top-nav").classList.remove("open");
+  }
   const initialTarget = location.hash.slice(1) || "home";
   if (document.getElementById(initialTarget)) showView(initialTarget);
   window.showQualityPortalView = showView;
