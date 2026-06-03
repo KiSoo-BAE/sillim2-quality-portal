@@ -87,11 +87,17 @@ function getKpiSummary() {
     readyMixCount: qualityPortalData.readyMix.rows.length,
     materialApprovalCount: materialRows.filter(row => row["승인상태"] === "완료").length,
     strengthTestCount: strengthRows.length,
+    qualityIssueCount: 0,
+    reworkCount: 0,
+    testCount: strengthRows.length + requestedRows.length,
     requestedInProgressCount: requestedRows.filter(row => row["진행상태"] !== "완료").length,
+    requestedCount: requestedRows.length,
     ncrCount: ncrRows.length,
     completionRate: ncrRows.length ? Math.round((completedNcr / ncrRows.length) * 100) : 0,
     passRate: testDecisionCount ? Math.round((passCount / testDecisionCount) * 1000) / 10 : 0,
     openNcr,
+    noAccidentDays: 0,
+    customerClaims: 0,
     totalReadyMixVolume: Math.round(sumReadyMixVolume())
   };
 }
@@ -99,12 +105,12 @@ function getKpiSummary() {
 function renderHomeKpis() {
   const kpi = getKpiSummary();
   const items = [
-    ["레미콘 타설건수", `${kpi.readyMixCount}건`, `누적 ${kpi.totalReadyMixVolume}m³`, "#d71920"],
-    ["자재공급원 승인건수", `${kpi.materialApprovalCount}건`, "건축·토목·조경 종합", "#102b55"],
-    ["압축강도 시험건수", `${kpi.strengthTestCount}건`, "7일·28일 시험 포함", "#2563eb"],
-    ["의뢰시험 진행건수", `${kpi.requestedInProgressCount}건`, "외부기관 진행 추적", "#2563eb"],
-    ["품질부적합 발생건수", `${kpi.ncrCount}건`, `미조치 ${kpi.openNcr}건`, "#f79009"],
-    ["조치완료율", `${kpi.completionRate}%`, "부적합 조치 기준", "#039855"]
+    ["품질지적 건수", `${kpi.qualityIssueCount}건`, "착공 전 데이터 없음", "#d71920"],
+    ["재시공 건수", `${kpi.reworkCount}건`, "착공 전 데이터 없음", "#f79009"],
+    ["시험실적", `${kpi.testCount}건`, "착공 전 데이터 없음", "#2563eb"],
+    ["시험합격률", `${kpi.passRate}%`, "착공 전 데이터 없음", "#039855"],
+    ["무재해 일수", `${kpi.noAccidentDays}일`, "착공 전 기준", "#102b55"],
+    ["고객 클레임", `${kpi.customerClaims}건`, "착공 전 데이터 없음", "#7c3aed"]
   ];
   document.getElementById("mainKpis").innerHTML = items.map(([label, value, trend, accent]) => `
     <article class="kpi-card" style="--accent:${accent}">
@@ -114,8 +120,8 @@ function renderHomeKpis() {
     </article>
   `).join("");
   document.getElementById("heroMetrics").innerHTML = `
-    <div><span>타설건수</span><strong>${kpi.readyMixCount}</strong></div>
-    <div><span>승인건수</span><strong>${kpi.materialApprovalCount}</strong></div>
+    <div><span>품질지적</span><strong>${kpi.qualityIssueCount}</strong></div>
+    <div><span>시험실적</span><strong>${kpi.testCount}</strong></div>
     <div><span>시험합격률</span><strong>${kpi.passRate}%</strong></div>
     <div><span>미조치</span><strong>${kpi.openNcr}</strong></div>
   `;
@@ -132,20 +138,11 @@ function renderMenus() {
 }
 
 function renderTodayRows() {
-  const rows = [
-    ["레미콘", "101동 B2F 기초 매트", qualityPortalData.readyMix.rows[0]["상태"], "타설관리"],
-    ["압축강도", "104동 B2F 기둥", "완료", "부적합"],
-    ["의뢰시험", "방수재 성능시험", "지연", "대기"],
-    ["부적합", "102동 1F 압축강도 재확인", "미조치", "부적합"]
-  ];
-  document.getElementById("todayRows").innerHTML = rows.map(row => `
+  document.getElementById("todayRows").innerHTML = `
     <tr>
-      <td>${row[0]}</td>
-      <td>${row[1]}</td>
-      <td>${renderBadge(row[2])}</td>
-      <td>${renderBadge(row[3])}</td>
+      <td colspan="4" class="empty-cell">착공 전 현장으로 등록된 품질 데이터가 없습니다.</td>
     </tr>
-  `).join("");
+  `;
 }
 
 function getSummaryItems(pageKey, rows) {
@@ -259,7 +256,7 @@ function updateStatusTable(pageKey) {
     <tr>
       ${data.columns.map(column => `<td>${isBadgeColumn(column) ? renderBadge(row[column]) : row[column]}</td>`).join("")}
     </tr>
-  `).join("") || `<tr><td colspan="${data.columns.length}" class="empty-cell">조회 결과가 없습니다.</td></tr>`;
+  `).join("") || `<tr><td colspan="${data.columns.length}" class="empty-cell">착공 전 현장으로 등록된 품질 데이터가 없습니다.</td></tr>`;
 }
 
 function handleScannedFileUpload(event) {
@@ -289,14 +286,14 @@ function parseDocumentByOCR(file, pageKey) {
 function renderDashboard() {
   const kpi = getKpiSummary();
   const dashboardItems = [
-    ["레미콘 타설건수", `${kpi.readyMixCount}건`, "#d71920"],
-    ["자재공급원 승인건수", `${kpi.materialApprovalCount}건`, "#102b55"],
-    ["압축강도 시험건수", `${kpi.strengthTestCount}건`, "#2563eb"],
-    ["의뢰시험 진행건수", `${kpi.requestedInProgressCount}건`, "#2563eb"],
-    ["품질부적합 발생건수", `${kpi.ncrCount}건`, "#f79009"],
-    ["조치완료율", `${kpi.completionRate}%`, "#039855"],
+    ["품질지적 건수", `${kpi.qualityIssueCount}건`, "#d71920"],
+    ["재시공 건수", `${kpi.reworkCount}건`, "#f79009"],
+    ["시험실적", `${kpi.testCount}건`, "#2563eb"],
     ["시험합격률", `${kpi.passRate}%`, "#039855"],
-    ["미조치 건수", `${kpi.openNcr}건`, "#d71920"]
+    ["무재해 일수", `${kpi.noAccidentDays}일`, "#102b55"],
+    ["고객 클레임", `${kpi.customerClaims}건`, "#7c3aed"],
+    ["의뢰시험 건수", `${kpi.requestedCount}건`, "#2563eb"],
+    ["조치완료율", `${kpi.completionRate}%`, "#039855"],
   ];
   document.getElementById("dashboardKpis").innerHTML = dashboardItems.map(([label, value, accent]) => `
     <article class="kpi-card" style="--accent:${accent}">
@@ -313,8 +310,19 @@ function renderDashboard() {
 }
 
 function renderRankList(targetId, dataMap) {
+  const entries = Object.entries(dataMap);
+  if (!entries.length) {
+    document.getElementById(targetId).innerHTML = `
+      <div class="rank-row">
+        <span>데이터 없음</span>
+        <div class="rank-bar"><span style="width:0%"></span></div>
+        <strong>0</strong>
+      </div>
+    `;
+    return;
+  }
   const max = Math.max(...Object.values(dataMap), 1);
-  document.getElementById(targetId).innerHTML = Object.entries(dataMap).map(([label, value]) => `
+  document.getElementById(targetId).innerHTML = entries.map(([label, value]) => `
     <div class="rank-row">
       <span>${label}</span>
       <div class="rank-bar"><span style="width:${Math.max(8, (value / max) * 100)}%"></span></div>
@@ -395,7 +403,7 @@ function drawDonutChart(canvasId, percent) {
 
 function drawDashboardCharts() {
   const kpi = getKpiSummary();
-  drawBarChart("monthlyChart", ["1월", "2월", "3월", "4월", "5월", "6월"], [31, 45, 52, 61, 74, qualityPortalData.compressive.rows.length + qualityPortalData.requestTest.rows.length + qualityPortalData.readyMix.rows.length], "#102b55");
+  drawBarChart("monthlyChart", ["1월", "2월", "3월", "4월", "5월", "6월"], [0, 0, 0, 0, 0, 0], "#102b55");
   drawDonutChart("passRateChart", kpi.passRate);
   const approvalRows = [
     ...qualityPortalData.materialArch.rows,
@@ -403,7 +411,7 @@ function drawDashboardCharts() {
     ...qualityPortalData.materialLandscape.rows
   ];
   const approvalMap = countBy(approvalRows, "승인상태");
-  drawBarChart("approvalChart", Object.keys(approvalMap), Object.values(approvalMap), "#d71920");
+  drawBarChart("approvalChart", ["승인", "진행", "지연", "보완"], [0, 0, 0, 0], "#d71920");
 }
 
 function showView(id) {
