@@ -9,19 +9,22 @@ const pageOrder = [
 ];
 
 const menuItems = [
-  ["readyMix", "①", "레미콘 타설현황", "타설부위, 설계강도, 제조사, 타설량과 상태 조회"],
-  ["materialArch", "②", "자재공급원승인(건축)", "건축 자재 규격, 승인상태와 판정 확인"],
-  ["materialCivil", "③", "자재공급원승인(토목)", "토목 자재 공급원 승인 현황 조회"],
-  ["materialLandscape", "④", "자재공급원승인(조경)", "조경 자재 샘플 및 승인 현황 조회"],
-  ["compressive", "⑤", "콘크리트 압축강도", "재령별 강도 시험결과와 판정 확인"],
-  ["requestTest", "⑥", "의뢰시험현황", "외부 의뢰시험 진행상태와 판정 추적"],
-  ["nonconformity", "⑦", "품질부적합사항", "부적합 발생 및 조치상태 추적"],
-  ["dashboard", "⑧", "KPI 대시보드", "1~7번 현황 데이터 자동 종합 집계"]
+  ["readyMix", "01", "레미콘 타설현황", "타설부위, 설계강도, 제조사, 타설량과 상태 조회"],
+  ["materialArch", "02", "자재공급원승인(건축)", "건축 자재 규격, 승인상태와 판정 확인"],
+  ["materialCivil", "03", "자재공급원승인(토목)", "토목 자재 공급원 승인 현황 조회"],
+  ["materialLandscape", "04", "자재공급원승인(조경)", "조경 자재 공급원 승인 현황 조회"],
+  ["compressive", "05", "콘크리트 압축강도", "재령별 강도 시험결과와 판정 확인"],
+  ["requestTest", "06", "의뢰시험현황", "외부 의뢰시험 진행상태와 판정 추적"],
+  ["nonconformity", "07", "품질부적합사항", "부적합 발생 및 조치상태 추적"],
+  ["dashboard", "08", "KPI 대시보드", "1~7번 현황 데이터 자동 종합 집계"]
 ];
 
 const badgeMap = {
   "완료": "pass",
   "합격": "pass",
+  "적합": "pass",
+  "승인": "pass",
+  "승인완료": "pass",
   "있음": "pass",
   "진행중": "progress",
   "검토중": "progress",
@@ -35,6 +38,8 @@ const badgeMap = {
   "없음": "fail"
 };
 
+const pageNumbers = Object.fromEntries(menuItems.map(([key, number]) => [key, number]));
+
 function getBadgeClass(value) {
   return badgeMap[value] || "";
 }
@@ -45,7 +50,7 @@ function isBadgeColumn(column) {
 
 function renderBadge(value) {
   const className = getBadgeClass(value);
-  if (!className) return value;
+  if (!className) return value || "-";
   return `<span class="badge ${className}">${value}</span>`;
 }
 
@@ -72,7 +77,7 @@ function isPending(value) {
 }
 
 function isPass(value) {
-  return ["합격", "적합", "완료", "승인"].includes(value);
+  return ["합격", "적합", "완료", "승인", "승인완료"].includes(value);
 }
 
 function isDecisionValue(value) {
@@ -98,10 +103,8 @@ function getKpiSummary() {
   const strengthRows = qualityPortalData.compressive.rows;
   const requestedRows = qualityPortalData.requestTest.rows;
   const ncrRows = qualityPortalData.nonconformity.rows;
-  const strengthDecisionRows = strengthRows.filter(row => isDecisionValue(row["판정"]));
   const requestedDecisionRows = requestedRows.filter(row => isDecisionValue(row["판정"]));
   const completedNcr = ncrRows.filter(row => row["상태"] === "완료").length;
-  const openNcr = ncrRows.filter(row => row["상태"] !== "완료").length;
   const arch = getMaterialKpi("materialArch");
   const civil = getMaterialKpi("materialCivil");
   const landscape = getMaterialKpi("materialLandscape");
@@ -109,60 +112,76 @@ function getKpiSummary() {
   return {
     readyMixCount: readyRows.length,
     totalReadyMixVolume: Math.round(sumReadyMixVolume()),
-    readyMixMakerStatus: countBy(readyRows, "제조사"),
-    materialArch: arch,
-    materialCivil: civil,
-    materialLandscape: landscape,
     materialApprovalCount: arch.approvalCount + civil.approvalCount + landscape.approvalCount,
-    strengthTestCount: strengthRows.length,
-    strengthAge7Count: strengthRows.filter(row => String(row["재령"]).includes("7")).length,
-    strengthAge28Count: strengthRows.filter(row => String(row["재령"]).includes("28")).length,
-    strengthFitRate: rate(strengthDecisionRows.filter(row => isPass(row["판정"])).length, strengthDecisionRows.length),
-    requestedCount: requestedRows.length,
-    requestedInProgressCount: requestedRows.filter(row => row["진행상태"] === "진행중").length,
-    requestedCompleteCount: requestedRows.filter(row => row["진행상태"] === "완료").length,
     requestedFitRate: rate(requestedDecisionRows.filter(row => isPass(row["판정"])).length, requestedDecisionRows.length),
     ncrCount: ncrRows.length,
     completedNcr,
-    openNcr,
-    completionRate: ncrRows.length ? Math.round((completedNcr / ncrRows.length) * 100) : 0,
-    testCount: strengthRows.length + requestedRows.length
+    openNcr: ncrRows.length - completedNcr,
+    completionRate: rate(completedNcr, ncrRows.length),
+    qualityGoodDays: 0,
+    requestedCount: requestedRows.length,
+    strengthTestCount: strengthRows.length,
+    totalStatusCount: readyRows.length + requestedRows.length + strengthRows.length + ncrRows.length
   };
+}
+
+function getPrimaryMetric(pageKey) {
+  const rows = qualityPortalData[pageKey]?.rows || [];
+  if (pageKey === "dashboard") return ["KPI", "0"];
+  if (pageKey === "readyMix") return ["총 타설건수", `${rows.length}건`];
+  if (["materialArch", "materialCivil", "materialLandscape"].includes(pageKey)) {
+    return ["승인건수", `${getMaterialKpi(pageKey).approvalCount}건`];
+  }
+  if (pageKey === "compressive") return ["시험건수", `${rows.length}건`];
+  if (pageKey === "requestTest") return ["의뢰건수", `${rows.length}건`];
+  return ["발생건수", `${rows.length}건`];
+}
+
+function kpiCardItems() {
+  const kpi = getKpiSummary();
+  return [
+    ["자재승인 건수", `${kpi.materialApprovalCount}건`, "건축·토목·조경 승인 누계", "#E60012"],
+    ["의뢰시험 적합률", `${kpi.requestedFitRate}%`, "의뢰시험 판정 기준", "#102A54"],
+    ["품질부적합 발생건수", `${kpi.ncrCount}건`, "품질부적합사항 누계", "#E60012"],
+    ["조치완료율", `${kpi.completionRate}%`, "부적합 조치 완료 기준", "#0B7A47"],
+    ["품질 우수관리 일수", `${kpi.qualityGoodDays}일`, "착공 전 기준값", "#102A54"]
+  ];
+}
+
+function renderKpiCards(targetId) {
+  document.getElementById(targetId).innerHTML = kpiCardItems().map(([label, value, note, accent]) => `
+    <article class="kpi-card" style="--accent:${accent}">
+      <span>${label}</span>
+      <strong>${value}</strong>
+      <small>${note}</small>
+    </article>
+  `).join("");
 }
 
 function renderHomeKpis() {
   const kpi = getKpiSummary();
-  const items = [
-    ["총 타설건수", `${kpi.readyMixCount}건`, "레미콘 타설현황 기준", "#d71920"],
-    ["총 타설량", `${kpi.totalReadyMixVolume}m³`, "레미콘 타설현황 기준", "#102b55"],
-    ["자재 승인건수", `${kpi.materialApprovalCount}건`, "건축·토목·조경 승인 기준", "#039855"],
-    ["압축강도 시험건수", `${kpi.strengthTestCount}건`, "콘크리트 압축강도 기준", "#2563eb"],
-    ["의뢰시험 건수", `${kpi.requestedCount}건`, "의뢰시험현황 기준", "#7c3aed"],
-    ["품질부적합 발생건수", `${kpi.ncrCount}건`, "품질부적합사항 기준", "#f79009"]
-  ];
-  document.getElementById("mainKpis").innerHTML = items.map(([label, value, trend, accent]) => `
-    <article class="kpi-card" style="--accent:${accent}">
-      <span>${label}</span>
-      <strong>${value}</strong>
-      <small>${trend}</small>
-    </article>
-  `).join("");
+  renderKpiCards("mainKpis");
   document.getElementById("heroMetrics").innerHTML = `
-    <div><span>총 타설</span><strong>${kpi.readyMixCount}</strong></div>
     <div><span>자재승인</span><strong>${kpi.materialApprovalCount}</strong></div>
-    <div><span>시험건수</span><strong>${kpi.testCount}</strong></div>
-    <div><span>미조치</span><strong>${kpi.openNcr}</strong></div>
+    <div><span>의뢰시험 적합률</span><strong>${kpi.requestedFitRate}%</strong></div>
+    <div><span>부적합</span><strong>${kpi.ncrCount}</strong></div>
+    <div><span>조치완료율</span><strong>${kpi.completionRate}%</strong></div>
   `;
 }
 
 function renderMenus() {
-  document.getElementById("menuCards").innerHTML = menuItems.map(([id, number, title, desc]) => `
-    <a class="menu-card" href="#${id}" data-target="${id}">
-      <b>${number}</b>
-      <strong>${title}</strong>
-      <span>${desc}</span>
-    </a>
-  `).join("");
+  document.getElementById("menuCards").innerHTML = menuItems.map(([id, number, title, desc]) => {
+    const [metricLabel, metricValue] = getPrimaryMetric(id);
+    return `
+      <a class="menu-card" href="#${id}" data-target="${id}">
+        <b>${number}</b>
+        <strong>${title}</strong>
+        <span>${desc}</span>
+        <em><i>${metricLabel}</i><mark>${metricValue}</mark></em>
+        <small>착공 전 현장으로 등록된 데이터 없음</small>
+      </a>
+    `;
+  }).join("");
 }
 
 function renderTodayRows() {
@@ -232,10 +251,13 @@ function renderStatusPages() {
 
     container.innerHTML = `
       <div class="page-head">
-        <div>
-          <p class="eyebrow">${data.eyebrow}</p>
-          <h2>${data.title}</h2>
-          <p class="page-desc">${data.description}</p>
+        <div class="number-heading">
+          <b>${pageNumbers[pageKey]}</b>
+          <div>
+            <p class="eyebrow">${data.eyebrow}</p>
+            <h2>${data.title}</h2>
+            <p class="page-desc">${data.description}</p>
+          </div>
         </div>
         <div class="upload-panel">
           <label class="scan-upload">
@@ -284,7 +306,7 @@ function updateStatusTable(pageKey) {
   const body = document.querySelector(`[data-table-body="${pageKey}"]`);
   body.innerHTML = filteredRows.map(row => `
     <tr>
-      ${data.columns.map(column => `<td>${isBadgeColumn(column) ? renderBadge(row[column]) : row[column]}</td>`).join("")}
+      ${data.columns.map(column => `<td>${isBadgeColumn(column) ? renderBadge(row[column]) : (row[column] || "-")}</td>`).join("")}
     </tr>
   `).join("") || `<tr><td colspan="${data.columns.length}" class="empty-cell">착공 전 현장으로 등록된 품질 데이터가 없습니다.</td></tr>`;
 }
@@ -314,39 +336,7 @@ function parseDocumentByOCR(file, pageKey) {
 }
 
 function renderDashboard() {
-  const kpi = getKpiSummary();
-  const dashboardItems = [
-    ["레미콘 총 타설건수", `${kpi.readyMixCount}건`, "#d71920"],
-    ["레미콘 총 타설량", `${kpi.totalReadyMixVolume}m³`, "#102b55"],
-    ["건축 승인건수", `${kpi.materialArch.approvalCount}건`, "#039855"],
-    ["건축 승인대기건수", `${kpi.materialArch.pendingCount}건`, "#2563eb"],
-    ["건축 적합률", `${kpi.materialArch.fitRate}%`, "#039855"],
-    ["토목 승인건수", `${kpi.materialCivil.approvalCount}건`, "#039855"],
-    ["토목 승인대기건수", `${kpi.materialCivil.pendingCount}건`, "#2563eb"],
-    ["토목 적합률", `${kpi.materialCivil.fitRate}%`, "#039855"],
-    ["조경 승인건수", `${kpi.materialLandscape.approvalCount}건`, "#039855"],
-    ["조경 승인대기건수", `${kpi.materialLandscape.pendingCount}건`, "#2563eb"],
-    ["조경 적합률", `${kpi.materialLandscape.fitRate}%`, "#039855"],
-    ["압축강도 시험건수", `${kpi.strengthTestCount}건`, "#2563eb"],
-    ["7일 시험건수", `${kpi.strengthAge7Count}건`, "#102b55"],
-    ["28일 시험건수", `${kpi.strengthAge28Count}건`, "#102b55"],
-    ["압축강도 적합률", `${kpi.strengthFitRate}%`, "#039855"],
-    ["의뢰시험 의뢰건수", `${kpi.requestedCount}건`, "#7c3aed"],
-    ["의뢰시험 진행중 건수", `${kpi.requestedInProgressCount}건`, "#2563eb"],
-    ["의뢰시험 완료건수", `${kpi.requestedCompleteCount}건`, "#039855"],
-    ["의뢰시험 적합률", `${kpi.requestedFitRate}%`, "#039855"],
-    ["부적합 발생건수", `${kpi.ncrCount}건`, "#d71920"],
-    ["조치완료건수", `${kpi.completedNcr}건`, "#039855"],
-    ["미조치건수", `${kpi.openNcr}건`, "#f79009"],
-    ["조치완료율", `${kpi.completionRate}%`, "#039855"],
-  ];
-  document.getElementById("dashboardKpis").innerHTML = dashboardItems.map(([label, value, accent]) => `
-    <article class="kpi-card" style="--accent:${accent}">
-      <span>${label}</span>
-      <strong>${value}</strong>
-      <small>data.js 기반 자동 집계</small>
-    </article>
-  `).join("");
+  renderKpiCards("dashboardKpis");
   renderRankList("tradeNcrRank", countBy(qualityPortalData.nonconformity.rows, "공종"));
   renderRankList("makerReadyMixRank", countBy(qualityPortalData.readyMix.rows, "제조사"));
   if (document.getElementById("dashboard").classList.contains("active")) {
@@ -387,7 +377,7 @@ function setupCanvas(canvas) {
   return { ctx, width, height, drawable: true };
 }
 
-function drawBarChart(canvasId, labels, values, color = "#102b55") {
+function drawBarChart(canvasId, labels, values, color = "#102A54") {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const { ctx, width, height, drawable } = setupCanvas(canvas);
@@ -396,7 +386,7 @@ function drawBarChart(canvasId, labels, values, color = "#102b55") {
   const max = Math.max(...values, 1) * 1.2;
   const barGap = 14;
   const barWidth = (width - pad * 2 - barGap * (values.length - 1)) / values.length;
-  ctx.strokeStyle = "#dbe3ef";
+  ctx.strokeStyle = "#D9DDE3";
   for (let i = 0; i < 4; i++) {
     const y = pad + i * ((height - pad * 2) / 3);
     ctx.beginPath();
@@ -414,7 +404,7 @@ function drawBarChart(canvasId, labels, values, color = "#102b55") {
     ctx.font = "12px Noto Sans KR";
     ctx.textAlign = "center";
     ctx.fillText(labels[index], x + barWidth / 2, height - 10);
-    ctx.fillStyle = "#071b3a";
+    ctx.fillStyle = "#0B1F3A";
     ctx.font = "800 12px Noto Sans KR";
     ctx.fillText(value, x + barWidth / 2, y - 8);
   });
@@ -429,34 +419,34 @@ function drawDonutChart(canvasId, percent) {
   const cy = height / 2;
   const radius = Math.min(width, height) / 2 - 30;
   ctx.lineWidth = 28;
-  ctx.strokeStyle = "#dbe3ef";
+  ctx.strokeStyle = "#D9DDE3";
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.strokeStyle = "#039855";
+  ctx.strokeStyle = "#E60012";
   ctx.beginPath();
   ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (percent / 100));
   ctx.stroke();
-  ctx.fillStyle = "#071b3a";
+  ctx.fillStyle = "#0B1F3A";
   ctx.font = "900 34px Noto Sans KR";
   ctx.textAlign = "center";
   ctx.fillText(`${percent}%`, cx, cy + 5);
   ctx.fillStyle = "#667085";
   ctx.font = "700 13px Noto Sans KR";
-  ctx.fillText("압축강도 적합률", cx, cy + 30);
+  ctx.fillText("의뢰시험 적합률", cx, cy + 30);
 }
 
 function drawDashboardCharts() {
   const kpi = getKpiSummary();
-  drawBarChart("monthlyChart", ["1월", "2월", "3월", "4월", "5월", "6월"], [0, 0, 0, 0, 0, 0], "#102b55");
-  drawDonutChart("passRateChart", kpi.strengthFitRate);
-  drawBarChart("approvalChart", ["승인", "진행", "지연", "보완"], [0, 0, 0, 0], "#d71920");
+  drawBarChart("monthlyChart", ["1월", "2월", "3월", "4월", "5월", "6월"], [0, 0, 0, 0, 0, 0], "#102A54");
+  drawDonutChart("passRateChart", kpi.requestedFitRate);
+  drawBarChart("approvalChart", ["승인", "진행", "지연", "보완"], [0, 0, 0, 0], "#E60012");
 }
 
 function showView(id) {
   document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === id));
   document.querySelectorAll(".nav-link").forEach(link => link.classList.toggle("active", link.dataset.target === id));
-  document.querySelector(".sidebar").classList.remove("open");
+  document.querySelector(".top-nav").classList.remove("open");
   window.scrollTo({ top: 0, behavior: "smooth" });
   if (id === "dashboard") setTimeout(renderDashboard, 80);
 }
@@ -494,7 +484,7 @@ function setupEvents() {
     if (event.target.dataset.uploadPage) handleScannedFileUpload(event);
   });
   document.querySelector(".menu-toggle").addEventListener("click", () => {
-    document.querySelector(".sidebar").classList.toggle("open");
+    document.querySelector(".top-nav").classList.toggle("open");
   });
   window.addEventListener("resize", () => {
     if (document.getElementById("dashboard").classList.contains("active")) renderDashboard();
