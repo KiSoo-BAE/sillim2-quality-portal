@@ -9,11 +9,11 @@ const pageOrder = [
 ];
 
 const menuItems = [
-  ["readyMix", "①", "레미콘 타설현황", "타설 위치, 설계강도, 제조사와 상태 조회"],
+  ["readyMix", "①", "레미콘 타설현황", "타설부위, 설계강도, 제조사, 타설량과 상태 조회"],
   ["materialArch", "②", "자재공급원승인(건축)", "건축 자재 규격, 승인상태와 판정 확인"],
   ["materialCivil", "③", "자재공급원승인(토목)", "토목 자재 공급원 승인 현황 조회"],
   ["materialLandscape", "④", "자재공급원승인(조경)", "조경 자재 샘플 및 승인 현황 조회"],
-  ["compressive", "⑤", "콘크리트압축강도현황", "재령별 강도 시험결과와 판정 확인"],
+  ["compressive", "⑤", "콘크리트 압축강도", "재령별 강도 시험결과와 판정 확인"],
   ["requestTest", "⑥", "의뢰시험현황", "외부 의뢰시험 진행상태와 판정 추적"],
   ["nonconformity", "⑦", "품질부적합사항", "부적합 발생 및 조치상태 추적"],
   ["dashboard", "⑧", "KPI 대시보드", "1~7번 현황 데이터 자동 종합 집계"]
@@ -63,54 +63,82 @@ function sumReadyMixVolume() {
   }, 0);
 }
 
+function isApproved(value) {
+  return ["완료", "승인", "승인완료"].includes(value);
+}
+
+function isPending(value) {
+  return ["대기", "진행중", "검토중", "보완", "보완요청", "지연"].includes(value);
+}
+
+function isPass(value) {
+  return ["합격", "적합", "완료", "승인"].includes(value);
+}
+
+function isDecisionValue(value) {
+  return Boolean(value) && !["대기", "진행중", "검토중", "보완", "보완요청"].includes(value);
+}
+
+function rate(numerator, denominator) {
+  return denominator ? Math.round((numerator / denominator) * 1000) / 10 : 0;
+}
+
+function getMaterialKpi(pageKey) {
+  const rows = qualityPortalData[pageKey].rows;
+  const decisionRows = rows.filter(row => isDecisionValue(row["판정"]));
+  return {
+    approvalCount: rows.filter(row => isApproved(row["승인상태"])).length,
+    pendingCount: rows.filter(row => isPending(row["승인상태"]) || !row["승인상태"]).length,
+    fitRate: rate(decisionRows.filter(row => isPass(row["판정"])).length, decisionRows.length)
+  };
+}
+
 function getKpiSummary() {
-  const materialRows = [
-    ...qualityPortalData.materialArch.rows,
-    ...qualityPortalData.materialCivil.rows,
-    ...qualityPortalData.materialLandscape.rows
-  ];
+  const readyRows = qualityPortalData.readyMix.rows;
   const strengthRows = qualityPortalData.compressive.rows;
   const requestedRows = qualityPortalData.requestTest.rows;
   const ncrRows = qualityPortalData.nonconformity.rows;
-  const passCount = [
-    ...strengthRows.map(row => row["판정"]),
-    ...requestedRows.map(row => row["판정"])
-  ].filter(value => value === "합격").length;
-  const testDecisionCount = [
-    ...strengthRows.map(row => row["판정"]),
-    ...requestedRows.map(row => row["판정"])
-  ].filter(value => value !== "대기" && value !== "진행중").length;
+  const strengthDecisionRows = strengthRows.filter(row => isDecisionValue(row["판정"]));
+  const requestedDecisionRows = requestedRows.filter(row => isDecisionValue(row["판정"]));
   const completedNcr = ncrRows.filter(row => row["상태"] === "완료").length;
   const openNcr = ncrRows.filter(row => row["상태"] !== "완료").length;
+  const arch = getMaterialKpi("materialArch");
+  const civil = getMaterialKpi("materialCivil");
+  const landscape = getMaterialKpi("materialLandscape");
 
   return {
-    readyMixCount: qualityPortalData.readyMix.rows.length,
-    materialApprovalCount: materialRows.filter(row => row["승인상태"] === "완료").length,
+    readyMixCount: readyRows.length,
+    totalReadyMixVolume: Math.round(sumReadyMixVolume()),
+    readyMixMakerStatus: countBy(readyRows, "제조사"),
+    materialArch: arch,
+    materialCivil: civil,
+    materialLandscape: landscape,
+    materialApprovalCount: arch.approvalCount + civil.approvalCount + landscape.approvalCount,
     strengthTestCount: strengthRows.length,
-    qualityIssueCount: 0,
-    reworkCount: 0,
-    testCount: strengthRows.length + requestedRows.length,
-    requestedInProgressCount: requestedRows.filter(row => row["진행상태"] !== "완료").length,
+    strengthAge7Count: strengthRows.filter(row => String(row["재령"]).includes("7")).length,
+    strengthAge28Count: strengthRows.filter(row => String(row["재령"]).includes("28")).length,
+    strengthFitRate: rate(strengthDecisionRows.filter(row => isPass(row["판정"])).length, strengthDecisionRows.length),
     requestedCount: requestedRows.length,
+    requestedInProgressCount: requestedRows.filter(row => row["진행상태"] === "진행중").length,
+    requestedCompleteCount: requestedRows.filter(row => row["진행상태"] === "완료").length,
+    requestedFitRate: rate(requestedDecisionRows.filter(row => isPass(row["판정"])).length, requestedDecisionRows.length),
     ncrCount: ncrRows.length,
-    completionRate: ncrRows.length ? Math.round((completedNcr / ncrRows.length) * 100) : 0,
-    passRate: testDecisionCount ? Math.round((passCount / testDecisionCount) * 1000) / 10 : 0,
+    completedNcr,
     openNcr,
-    noAccidentDays: 0,
-    customerClaims: 0,
-    totalReadyMixVolume: Math.round(sumReadyMixVolume())
+    completionRate: ncrRows.length ? Math.round((completedNcr / ncrRows.length) * 100) : 0,
+    testCount: strengthRows.length + requestedRows.length
   };
 }
 
 function renderHomeKpis() {
   const kpi = getKpiSummary();
   const items = [
-    ["품질지적 건수", `${kpi.qualityIssueCount}건`, "착공 전 데이터 없음", "#d71920"],
-    ["재시공 건수", `${kpi.reworkCount}건`, "착공 전 데이터 없음", "#f79009"],
-    ["시험실적", `${kpi.testCount}건`, "착공 전 데이터 없음", "#2563eb"],
-    ["시험합격률", `${kpi.passRate}%`, "착공 전 데이터 없음", "#039855"],
-    ["무재해 일수", `${kpi.noAccidentDays}일`, "착공 전 기준", "#102b55"],
-    ["고객 클레임", `${kpi.customerClaims}건`, "착공 전 데이터 없음", "#7c3aed"]
+    ["총 타설건수", `${kpi.readyMixCount}건`, "레미콘 타설현황 기준", "#d71920"],
+    ["총 타설량", `${kpi.totalReadyMixVolume}m³`, "레미콘 타설현황 기준", "#102b55"],
+    ["자재 승인건수", `${kpi.materialApprovalCount}건`, "건축·토목·조경 승인 기준", "#039855"],
+    ["압축강도 시험건수", `${kpi.strengthTestCount}건`, "콘크리트 압축강도 기준", "#2563eb"],
+    ["의뢰시험 건수", `${kpi.requestedCount}건`, "의뢰시험현황 기준", "#7c3aed"],
+    ["품질부적합 발생건수", `${kpi.ncrCount}건`, "품질부적합사항 기준", "#f79009"]
   ];
   document.getElementById("mainKpis").innerHTML = items.map(([label, value, trend, accent]) => `
     <article class="kpi-card" style="--accent:${accent}">
@@ -120,9 +148,9 @@ function renderHomeKpis() {
     </article>
   `).join("");
   document.getElementById("heroMetrics").innerHTML = `
-    <div><span>품질지적</span><strong>${kpi.qualityIssueCount}</strong></div>
-    <div><span>시험실적</span><strong>${kpi.testCount}</strong></div>
-    <div><span>시험합격률</span><strong>${kpi.passRate}%</strong></div>
+    <div><span>총 타설</span><strong>${kpi.readyMixCount}</strong></div>
+    <div><span>자재승인</span><strong>${kpi.materialApprovalCount}</strong></div>
+    <div><span>시험건수</span><strong>${kpi.testCount}</strong></div>
     <div><span>미조치</span><strong>${kpi.openNcr}</strong></div>
   `;
 }
@@ -150,44 +178,46 @@ function getSummaryItems(pageKey, rows) {
     const status = countBy(rows, "상태");
     return [
       ["총 타설건수", `${rows.length}건`],
-      ["타설량", `${Math.round(sumReadyMixVolume())}m³`],
+      ["총 타설량", `${Math.round(sumReadyMixVolume())}m³`],
       ["완료", `${status["완료"] || 0}건`],
       ["진행/지연", `${(status["진행중"] || 0) + (status["지연"] || 0)}건`]
     ];
   }
   if (["materialArch", "materialCivil", "materialLandscape"].includes(pageKey)) {
-    const approval = countBy(rows, "승인상태");
+    const materialKpi = getMaterialKpi(pageKey);
     return [
-      ["등록 자재", `${rows.length}건`],
-      ["승인 완료", `${approval["완료"] || 0}건`],
-      ["검토중", `${approval["진행중"] || 0}건`],
-      ["보완/지연", `${approval["지연"] || 0}건`]
+      ["승인건수", `${materialKpi.approvalCount}건`],
+      ["승인대기건수", `${materialKpi.pendingCount}건`],
+      ["적합률", `${materialKpi.fitRate}%`],
+      ["등록 자재", `${rows.length}건`]
     ];
   }
   if (pageKey === "compressive") {
-    const decision = countBy(rows, "판정");
+    const decisionRows = rows.filter(row => isDecisionValue(row["판정"]));
     return [
       ["시험건수", `${rows.length}건`],
-      ["합격", `${decision["합격"] || 0}건`],
-      ["진행중", `${decision["진행중"] || 0}건`],
-      ["부적합", `${decision["부적합"] || 0}건`]
+      ["7일 시험건수", `${rows.filter(row => String(row["재령"]).includes("7")).length}건`],
+      ["28일 시험건수", `${rows.filter(row => String(row["재령"]).includes("28")).length}건`],
+      ["적합률", `${rate(decisionRows.filter(row => isPass(row["판정"])).length, decisionRows.length)}%`]
     ];
   }
   if (pageKey === "requestTest") {
     const status = countBy(rows, "진행상태");
+    const decisionRows = rows.filter(row => isDecisionValue(row["판정"]));
     return [
       ["의뢰건수", `${rows.length}건`],
+      ["진행중 건수", `${status["진행중"] || 0}건`],
       ["완료", `${status["완료"] || 0}건`],
-      ["진행중", `${status["진행중"] || 0}건`],
-      ["지연", `${status["지연"] || 0}건`]
+      ["적합률", `${rate(decisionRows.filter(row => isPass(row["판정"])).length, decisionRows.length)}%`]
     ];
   }
   const ncrStatus = countBy(rows, "상태");
+  const completed = ncrStatus["완료"] || 0;
   return [
     ["발생건수", `${rows.length}건`],
-    ["조치완료", `${ncrStatus["완료"] || 0}건`],
-    ["진행중", `${ncrStatus["진행중"] || 0}건`],
-    ["미조치/지연", `${(ncrStatus["미조치"] || 0) + (ncrStatus["지연"] || 0)}건`]
+    ["조치완료건수", `${completed}건`],
+    ["미조치건수", `${rows.length - completed}건`],
+    ["조치완료율", `${rate(completed, rows.length)}%`]
   ];
 }
 
@@ -286,13 +316,28 @@ function parseDocumentByOCR(file, pageKey) {
 function renderDashboard() {
   const kpi = getKpiSummary();
   const dashboardItems = [
-    ["품질지적 건수", `${kpi.qualityIssueCount}건`, "#d71920"],
-    ["재시공 건수", `${kpi.reworkCount}건`, "#f79009"],
-    ["시험실적", `${kpi.testCount}건`, "#2563eb"],
-    ["시험합격률", `${kpi.passRate}%`, "#039855"],
-    ["무재해 일수", `${kpi.noAccidentDays}일`, "#102b55"],
-    ["고객 클레임", `${kpi.customerClaims}건`, "#7c3aed"],
-    ["의뢰시험 건수", `${kpi.requestedCount}건`, "#2563eb"],
+    ["레미콘 총 타설건수", `${kpi.readyMixCount}건`, "#d71920"],
+    ["레미콘 총 타설량", `${kpi.totalReadyMixVolume}m³`, "#102b55"],
+    ["건축 승인건수", `${kpi.materialArch.approvalCount}건`, "#039855"],
+    ["건축 승인대기건수", `${kpi.materialArch.pendingCount}건`, "#2563eb"],
+    ["건축 적합률", `${kpi.materialArch.fitRate}%`, "#039855"],
+    ["토목 승인건수", `${kpi.materialCivil.approvalCount}건`, "#039855"],
+    ["토목 승인대기건수", `${kpi.materialCivil.pendingCount}건`, "#2563eb"],
+    ["토목 적합률", `${kpi.materialCivil.fitRate}%`, "#039855"],
+    ["조경 승인건수", `${kpi.materialLandscape.approvalCount}건`, "#039855"],
+    ["조경 승인대기건수", `${kpi.materialLandscape.pendingCount}건`, "#2563eb"],
+    ["조경 적합률", `${kpi.materialLandscape.fitRate}%`, "#039855"],
+    ["압축강도 시험건수", `${kpi.strengthTestCount}건`, "#2563eb"],
+    ["7일 시험건수", `${kpi.strengthAge7Count}건`, "#102b55"],
+    ["28일 시험건수", `${kpi.strengthAge28Count}건`, "#102b55"],
+    ["압축강도 적합률", `${kpi.strengthFitRate}%`, "#039855"],
+    ["의뢰시험 의뢰건수", `${kpi.requestedCount}건`, "#7c3aed"],
+    ["의뢰시험 진행중 건수", `${kpi.requestedInProgressCount}건`, "#2563eb"],
+    ["의뢰시험 완료건수", `${kpi.requestedCompleteCount}건`, "#039855"],
+    ["의뢰시험 적합률", `${kpi.requestedFitRate}%`, "#039855"],
+    ["부적합 발생건수", `${kpi.ncrCount}건`, "#d71920"],
+    ["조치완료건수", `${kpi.completedNcr}건`, "#039855"],
+    ["미조치건수", `${kpi.openNcr}건`, "#f79009"],
     ["조치완료율", `${kpi.completionRate}%`, "#039855"],
   ];
   document.getElementById("dashboardKpis").innerHTML = dashboardItems.map(([label, value, accent]) => `
@@ -398,19 +443,13 @@ function drawDonutChart(canvasId, percent) {
   ctx.fillText(`${percent}%`, cx, cy + 5);
   ctx.fillStyle = "#667085";
   ctx.font = "700 13px Noto Sans KR";
-  ctx.fillText("시험합격률", cx, cy + 30);
+  ctx.fillText("압축강도 적합률", cx, cy + 30);
 }
 
 function drawDashboardCharts() {
   const kpi = getKpiSummary();
   drawBarChart("monthlyChart", ["1월", "2월", "3월", "4월", "5월", "6월"], [0, 0, 0, 0, 0, 0], "#102b55");
-  drawDonutChart("passRateChart", kpi.passRate);
-  const approvalRows = [
-    ...qualityPortalData.materialArch.rows,
-    ...qualityPortalData.materialCivil.rows,
-    ...qualityPortalData.materialLandscape.rows
-  ];
-  const approvalMap = countBy(approvalRows, "승인상태");
+  drawDonutChart("passRateChart", kpi.strengthFitRate);
   drawBarChart("approvalChart", ["승인", "진행", "지연", "보완"], [0, 0, 0, 0], "#d71920");
 }
 
