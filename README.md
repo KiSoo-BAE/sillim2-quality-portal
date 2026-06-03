@@ -3,7 +3,7 @@
 ## 프로젝트 정보
 
 - 프로젝트명: LOTTE SMART QUALITY PORTAL
-- 현장명: 신림2 재정비촉진구역 주택재개발사업
+- 현장명: 신림2재정비촉진구역 주택재개발정비사업
 - GitHub Pages 배포 주소: https://KiSoo-BAE.github.io/sillim2-quality-portal/
 
 ## 주요 기능
