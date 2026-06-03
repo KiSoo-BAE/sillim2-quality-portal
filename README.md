@@ -12,7 +12,7 @@
 - 자재공급원승인(건축)
 - 자재공급원승인(토목)
 - 자재공급원승인(조경)
-- 콘크리트압축강도현황
+- 콘크리트 압축강도
 - 의뢰시험현황
 - 품질부적합사항
 - KPI 대시보드
@@ -23,7 +23,7 @@
 - 자재공급원승인(건축): `#materialArch`
 - 자재공급원승인(토목): `#materialCivil`
 - 자재공급원승인(조경): `#materialLandscape`
-- 콘크리트압축강도현황: `#compressive`
+- 콘크리트 압축강도: `#compressive`
 - 의뢰시험현황: `#requestTest`
 - 품질부적합사항: `#nonconformity`
 - KPI 대시보드: `#dashboard`
