@@ -3,81 +3,62 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>롯데건설 스마트 품질관리 포털</title>
+  <title>신림2 재정비촉진구역 품질관리 포털</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=20260603-board1">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" aria-label="주요 메뉴">
-      <div class="brand-block">
+  <div class="site-shell">
+    <header class="board-header">
+      <div class="brand-area">
         <div class="brand-mark">LOTTE E&amp;C</div>
-        <div class="brand-sub">스마트 품질관리 포털</div>
+        <span>SMART QUALITY MANAGEMENT</span>
       </div>
-      <nav class="side-nav">
-        <a class="nav-link active" href="#home" data-target="home"><span>⌂</span> 종합현황</a>
-        <a class="nav-link" href="#readyMix" data-target="readyMix"><span>①</span> 레미콘 타설현황</a>
-        <a class="nav-link" href="#materialArch" data-target="materialArch"><span>②</span> 자재공급원승인(건축)</a>
-        <a class="nav-link" href="#materialCivil" data-target="materialCivil"><span>③</span> 자재공급원승인(토목)</a>
-        <a class="nav-link" href="#materialLandscape" data-target="materialLandscape"><span>④</span> 자재공급원승인(조경)</a>
-        <a class="nav-link" href="#compressive" data-target="compressive"><span>⑤</span> 콘크리트 압축강도</a>
-        <a class="nav-link" href="#requestTest" data-target="requestTest"><span>⑥</span> 의뢰시험현황</a>
-        <a class="nav-link" href="#nonconformity" data-target="nonconformity"><span>⑦</span> 품질부적합사항</a>
-        <a class="nav-link" href="#dashboard" data-target="dashboard"><span>⑧</span> KPI 대시보드</a>
-      </nav>
-      <div class="sidebar-footer">
-        <strong>QR CONNECTED</strong>
-        <span>Google Drive · Sheets · OCR API 연동 확장 구조</span>
+      <div class="title-area">
+        <p>신림2 재정비촉진구역</p>
+        <h1>품질관리 포털</h1>
+        <strong>품질은 우리의 자존심, 신뢰는 고객과의 약속입니다.</strong>
       </div>
-    </aside>
+      <div class="site-info-card">
+        <dl>
+          <div><dt>현장명</dt><dd>신림2 재정비촉진구역 주택재개발사업</dd></div>
+          <div><dt>상태</dt><dd><span class="status-dot"></span>착공 전</dd></div>
+        </dl>
+      </div>
+    </header>
+
+    <nav class="top-nav" aria-label="주요 메뉴">
+      <button class="menu-toggle" aria-label="메뉴 열기">MENU</button>
+      <div class="nav-scroll">
+        <a class="nav-link active" href="#home" data-target="home"><span>00</span> 종합현황</a>
+        <a class="nav-link" href="#readyMix" data-target="readyMix"><span>01</span> 레미콘 타설현황</a>
+        <a class="nav-link" href="#materialArch" data-target="materialArch"><span>02</span> 자재공급원승인(건축)</a>
+        <a class="nav-link" href="#materialCivil" data-target="materialCivil"><span>03</span> 자재공급원승인(토목)</a>
+        <a class="nav-link" href="#materialLandscape" data-target="materialLandscape"><span>04</span> 자재공급원승인(조경)</a>
+        <a class="nav-link" href="#compressive" data-target="compressive"><span>05</span> 콘크리트 압축강도</a>
+        <a class="nav-link" href="#requestTest" data-target="requestTest"><span>06</span> 의뢰시험현황</a>
+        <a class="nav-link" href="#nonconformity" data-target="nonconformity"><span>07</span> 품질부적합사항</a>
+        <a class="nav-link" href="#dashboard" data-target="dashboard"><span>08</span> KPI 대시보드</a>
+      </div>
+    </nav>
 
     <main class="main">
-      <header class="topbar">
-        <button class="menu-toggle" aria-label="메뉴 열기">☰</button>
-        <div>
-          <p class="eyebrow">신림2 재정비촉진구역 주택재개발사업</p>
-          <h1>SMART QUALITY MANAGEMENT</h1>
-        </div>
-        <div class="top-status">
-          <span class="pulse"></span>
-          <span>LIVE QUALITY BOARD</span>
-        </div>
-      </header>
-
       <div class="prestart-banner">
         <strong>착공 전 현장 안내</strong>
         <p>현재 착공 전 단계로 품질 데이터가 등록되지 않았습니다. 착공 후 실시간 품질 데이터가 자동 반영됩니다.</p>
       </div>
 
       <section class="view active" id="home">
-        <div class="hero-panel">
-          <div class="hero-copy">
-            <div class="hero-brand">LOTTE E&amp;C</div>
-            <h2><span>SMART</span><span>QUALITY</span><span>STATUS BOARD</span></h2>
-            <p class="project-name">신림2 재정비촉진구역 주택재개발사업</p>
-            <p class="slogan">품질은 우리의 자존심,<br>신뢰는 고객과의 약속입니다.</p>
-            <div class="hero-actions">
-              <a class="primary-action" href="#readyMix" data-target="readyMix">현황 조회</a>
-              <a class="secondary-action" href="#dashboard" data-target="dashboard">KPI 보기</a>
-            </div>
+        <section class="overview-board">
+          <div>
+            <p class="eyebrow">QUALITY CONTROL BOARD</p>
+            <h2>신림2 품질관리 종합현황</h2>
+            <span>QR 접속 즉시 현장 품질 현황을 조회하는 롯데건설 품질시험실 포털</span>
           </div>
-          <div class="control-room">
-            <div class="screen-head">
-              <span>QUALITY CONTROL STATUS</span>
-              <strong>2026.06</strong>
-            </div>
-            <div class="screen-grid" id="heroMetrics"></div>
-            <div class="ticker" aria-label="품질 공지">
-              <span>착공 전 단계로 품질 데이터가 등록되지 않았습니다</span>
-              <span>착공 후 Google Sheets 연동 데이터가 자동 반영됩니다</span>
-              <span>KPI 대시보드는 현재 0 기준으로 운영됩니다</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="kpi-grid" id="mainKpis"></div>
+          <div class="board-mini" id="heroMetrics"></div>
+        </section>
 
         <section class="section-block">
           <div class="section-title">
@@ -85,9 +66,20 @@
               <p class="eyebrow">FIELD STATUS MENU</p>
               <h3>품질관리 현황 조회</h3>
             </div>
-            <span>QR 접속 후 현장 품질 현황 즉시 확인</span>
+            <span>01~08 현황판 바로가기</span>
           </div>
           <div class="menu-card-grid" id="menuCards"></div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">QUALITY KPI</p>
+              <h3>착공 전 KPI 기준값</h3>
+            </div>
+            <a class="text-action" href="#dashboard" data-target="dashboard">KPI 대시보드</a>
+          </div>
+          <div class="kpi-grid" id="mainKpis"></div>
         </section>
 
         <section class="split-grid">
@@ -127,62 +119,50 @@
         </section>
       </section>
 
-      <section class="view" id="readyMix">
-        <div class="status-page" data-page="readyMix"></div>
-      </section>
-
-      <section class="view" id="materialArch">
-        <div class="status-page" data-page="materialArch"></div>
-      </section>
-
-      <section class="view" id="materialCivil">
-        <div class="status-page" data-page="materialCivil"></div>
-      </section>
-
-      <section class="view" id="materialLandscape">
-        <div class="status-page" data-page="materialLandscape"></div>
-      </section>
-
-      <section class="view" id="compressive">
-        <div class="status-page" data-page="compressive"></div>
-      </section>
-
-      <section class="view" id="requestTest">
-        <div class="status-page" data-page="requestTest"></div>
-      </section>
-
-      <section class="view" id="nonconformity">
-        <div class="status-page" data-page="nonconformity"></div>
-      </section>
+      <section class="view" id="readyMix"><div class="status-page" data-page="readyMix"></div></section>
+      <section class="view" id="materialArch"><div class="status-page" data-page="materialArch"></div></section>
+      <section class="view" id="materialCivil"><div class="status-page" data-page="materialCivil"></div></section>
+      <section class="view" id="materialLandscape"><div class="status-page" data-page="materialLandscape"></div></section>
+      <section class="view" id="compressive"><div class="status-page" data-page="compressive"></div></section>
+      <section class="view" id="requestTest"><div class="status-page" data-page="requestTest"></div></section>
+      <section class="view" id="nonconformity"><div class="status-page" data-page="nonconformity"></div></section>
 
       <section class="view" id="dashboard">
-        <div class="page-head">
-          <div>
-            <p class="eyebrow">INTEGRATED KPI DASHBOARD</p>
-            <h2>KPI 대시보드</h2>
+        <div class="page-head dashboard-head">
+          <div class="number-heading">
+            <b>08</b>
+            <div>
+              <p class="eyebrow">QUALITY KPI DASHBOARD</p>
+              <h2>KPI 대시보드</h2>
+              <p class="page-desc">1~7번 현황 데이터를 기준으로 자동 집계됩니다.</p>
+            </div>
           </div>
           <button class="text-action" data-action="refreshDashboard">데이터 재집계</button>
         </div>
         <div class="kpi-grid dashboard-kpis" id="dashboardKpis"></div>
         <div class="chart-grid">
           <article class="chart-card"><h3>월별 시험실적</h3><canvas id="monthlyChart" height="230"></canvas></article>
-          <article class="chart-card"><h3>압축강도 적합률</h3><canvas id="passRateChart" height="230"></canvas></article>
+          <article class="chart-card"><h3>의뢰시험 적합률</h3><canvas id="passRateChart" height="230"></canvas></article>
           <article class="chart-card"><h3>공종별 부적합 현황</h3><div class="rank-list" id="tradeNcrRank"></div></article>
           <article class="chart-card"><h3>제조사별 레미콘 현황</h3><div class="rank-list" id="makerReadyMixRank"></div></article>
           <article class="chart-card wide"><h3>승인상태별 자재 현황</h3><canvas id="approvalChart" height="230"></canvas></article>
         </div>
       </section>
-
-      <footer class="site-footer">
-        <strong>QR 운영 안내</strong>
-        <p>본 사이트는 GitHub Pages 배포 후 생성된 URL을 QR코드로 변환하여 현장 품질시험실에서 운영할 수 있습니다.</p>
-        <p>QR 접속 주소: <a href="https://KiSoo-BAE.github.io/sillim2-quality-portal/">https://KiSoo-BAE.github.io/sillim2-quality-portal/</a></p>
-      </footer>
     </main>
+
+    <footer class="site-footer">
+      <div>
+        <strong>LOTTE E&amp;C</strong>
+        <span>품질은 미래다</span>
+        <span>기본과 원칙 준수</span>
+        <span>정직과 신뢰의 가치 실현</span>
+      </div>
+      <p>신림2 재정비촉진구역 품질관리 포털</p>
+    </footer>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./data.js?v=20260603-kpi2"></script>
-  <script src="./script.js?v=20260603-kpi2"></script>
+  <script src="./data.js?v=20260603-board1"></script>
+  <script src="./script.js?v=20260603-board1"></script>
 </body>
 </html>
