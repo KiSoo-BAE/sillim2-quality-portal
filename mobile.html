@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./mobile.css?v=20260604-mobile-core1">
+  <link rel="stylesheet" href="./mobile.css?v=20260604-ocr1">
 </head>
 <body>
   <main class="mobile-shell">
@@ -147,6 +147,49 @@
             <input type="file" name="photo" accept="image/*,.jpg,.jpeg,.png,.pdf">
             <small>사진 또는 PDF 파일을 선택할 수 있습니다.</small>
           </label>
+
+          <section class="ocr-panel" id="ocrPanel" aria-live="polite">
+            <div class="ocr-head">
+              <div>
+                <p>OCR ANALYSIS</p>
+                <h3>사진 문자 인식 결과</h3>
+              </div>
+              <span id="ocrStatus">사진 업로드 시 OCR 분석을 실행합니다.</span>
+            </div>
+
+            <label>
+              OCR 결과 텍스트
+              <textarea id="ocrRawText" name="ocrRawText" placeholder="OCR 분석 결과가 이곳에 표시됩니다. 필요 시 직접 수정하세요."></textarea>
+            </label>
+
+            <div class="ocr-section">
+              <h4>압축강도 추출 항목</h4>
+              <div class="ocr-fields">
+                <label>타설부위<input type="text" name="ocrCompression_pouringArea"></label>
+                <label>규격<input type="text" name="ocrCompression_spec"></label>
+                <label>제조사<input type="text" name="ocrCompression_manufacturer"></label>
+                <label>타설일자<input type="text" name="ocrCompression_pouringDate"></label>
+                <label>거푸집해체강도<input type="text" name="ocrCompression_formRemovalStrength"></label>
+                <label>28일 강도<input type="text" name="ocrCompression_day28Strength"></label>
+                <label>시험결과<input type="text" name="ocrCompression_result"></label>
+                <label>상태<input type="text" name="ocrCompression_status"></label>
+              </div>
+            </div>
+
+            <div class="ocr-section">
+              <h4>자재공급원승인 추출 항목</h4>
+              <div class="ocr-fields">
+                <label>자재명<input type="text" name="ocrMaterial_materialName"></label>
+                <label>업체명<input type="text" name="ocrMaterial_company"></label>
+                <label>공종<input type="text" name="ocrMaterial_trade"></label>
+                <label>제출일<input type="text" name="ocrMaterial_submitDate"></label>
+                <label>승인예정일<input type="text" name="ocrMaterial_expectedApprovalDate"></label>
+                <label>상태<input type="text" name="ocrMaterial_status"></label>
+                <label>비고<input type="text" name="ocrMaterial_note"></label>
+              </div>
+            </div>
+          </section>
+
           <button class="save-button" type="submit">저장</button>
         </form>
       </section>
@@ -185,6 +228,7 @@
   </nav>
 
   <div class="mobile-toast" id="mobileToast" role="status" aria-live="polite"></div>
-  <script src="./mobile.js?v=20260604-mobile-core1"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/6.0.1/tesseract.min.js"></script>
+  <script src="./mobile.js?v=20260604-ocr1"></script>
 </body>
 </html>
