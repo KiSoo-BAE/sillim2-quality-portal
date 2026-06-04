@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./mobile.css?v=20260604-mobile-dashboard1">
+  <link rel="stylesheet" href="./mobile.css?v=20260604-mobile-core1">
 </head>
 <body>
   <main class="mobile-shell">
@@ -34,58 +34,72 @@
 
     <nav class="mobile-tabs" aria-label="모바일 포털 탭">
       <button class="tab-button active" type="button" data-tab="dashboard">대시보드</button>
-      <button class="tab-button" type="button" data-tab="status">현황</button>
+      <button class="tab-button" type="button" data-tab="compression">압축강도</button>
+      <button class="tab-button" type="button" data-tab="material">자재승인</button>
       <button class="tab-button" type="button" data-tab="photo">사진등록</button>
-      <button class="tab-button" type="button" data-tab="sor">SOR</button>
-      <button class="tab-button" type="button" data-tab="kpi">KPI</button>
+      <button class="tab-button" type="button" data-tab="status">현황</button>
     </nav>
 
     <section class="tab-view active" id="tab-dashboard">
       <div class="section-head">
         <p>DASHBOARD</p>
-        <h2>현장 품질 대시보드</h2>
+        <h2>압축강도·자재승인 중심 현장 포털</h2>
       </div>
       <div class="dashboard-grid" id="mobileDashboardCards"></div>
     </section>
 
-    <section class="tab-view" id="tab-status">
+    <section class="tab-view" id="tab-compression">
       <div class="section-head">
-        <p>STATUS</p>
-        <h2>최근 등록 현황</h2>
+        <p>COMPRESSION STRENGTH</p>
+        <h2>콘크리트 압축강도</h2>
       </div>
-      <div class="status-list" id="mobileStatusList"></div>
+      <div class="metric-grid" id="compressionSummaryCards"></div>
+      <div class="data-list" id="compressionList"></div>
+    </section>
+
+    <section class="tab-view" id="tab-material">
+      <div class="section-head">
+        <p>MATERIAL APPROVAL</p>
+        <h2>자재공급원 승인</h2>
+      </div>
+      <div class="metric-grid" id="materialSummaryCards"></div>
+      <div class="data-list" id="materialList"></div>
     </section>
 
     <section class="tab-view" id="tab-photo">
       <div class="section-head">
-        <p>FIELD INPUT</p>
-        <h2>현장 등록</h2>
+        <p>PHOTO REGISTER</p>
+        <h2>현장 사진 등록</h2>
       </div>
 
       <div class="action-panel" aria-label="등록 유형 선택">
-        <button class="action-button active" type="button" data-entry-type="photo">
+        <button class="action-button active" type="button" data-entry-type="specimenPhoto">
           <span>01</span>
-          <strong>사진 등록</strong>
+          <strong>공시체 사진</strong>
         </button>
-        <button class="action-button" type="button" data-entry-type="qualityIssue">
+        <button class="action-button" type="button" data-entry-type="compressionTestPhoto">
           <span>02</span>
-          <strong>품질 지적사항 등록</strong>
+          <strong>압축강도 시험 사진</strong>
         </button>
-        <button class="action-button" type="button" data-entry-type="sor">
+        <button class="action-button" type="button" data-entry-type="testReportPhoto">
           <span>03</span>
-          <strong>SOR 현황 등록</strong>
+          <strong>시험성적서 사진</strong>
         </button>
-        <button class="action-button" type="button" data-entry-type="testStatus">
+        <button class="action-button" type="button" data-entry-type="pouringAreaPhoto">
           <span>04</span>
-          <strong>시험 현황 등록</strong>
+          <strong>타설부위 사진</strong>
         </button>
-        <button class="action-button" type="button" data-entry-type="notice">
+        <button class="action-button" type="button" data-entry-type="approvalDocPhoto">
           <span>05</span>
-          <strong>공지사항 등록</strong>
+          <strong>자재승인서 사진</strong>
         </button>
-        <button class="action-button" type="button" data-entry-type="completionPhoto">
+        <button class="action-button" type="button" data-entry-type="materialInspectionPhoto">
           <span>06</span>
-          <strong>완료 사진 업로드</strong>
+          <strong>자재검수 사진</strong>
+        </button>
+        <button class="action-button" type="button" data-entry-type="ksCertificatePhoto">
+          <span>07</span>
+          <strong>시험성적서/KS인증서 사진</strong>
         </button>
       </div>
 
@@ -93,19 +107,19 @@
         <div class="form-head">
           <span id="selectedTypeNo">01</span>
           <div>
-            <p>SELECTED INPUT</p>
-            <h2 id="selectedTypeTitle">사진 등록</h2>
+            <p>SELECTED PHOTO</p>
+            <h2 id="selectedTypeTitle">공시체 사진</h2>
           </div>
         </div>
 
         <form id="mobileInputForm">
           <label>
             제목
-            <input type="text" name="title" placeholder="예: 현장 전경 사진" required>
+            <input type="text" name="title" placeholder="예: 28일 압축강도 공시체 사진" required>
           </label>
           <label>
             위치
-            <input type="text" name="location" placeholder="예: 품질시험실 / 지하 1층">
+            <input type="text" name="location" placeholder="예: 품질시험실 / 타설부위">
           </label>
           <label>
             공종
@@ -119,14 +133,14 @@
             상태
             <select name="status">
               <option value="등록">등록</option>
-              <option value="진행중">진행중</option>
+              <option value="검토중">검토중</option>
               <option value="완료">완료</option>
-              <option value="미조치">미조치</option>
+              <option value="보완요청">보완요청</option>
             </select>
           </label>
           <label>
             비고
-            <textarea name="note" placeholder="현장 확인 사항을 입력하세요."></textarea>
+            <textarea name="note" placeholder="압축강도, 자재승인, 사진 확인 사항을 입력하세요."></textarea>
           </label>
           <label class="file-input">
             사진 업로드
@@ -138,20 +152,12 @@
       </section>
     </section>
 
-    <section class="tab-view" id="tab-sor">
+    <section class="tab-view" id="tab-status">
       <div class="section-head">
-        <p>SOR STATUS</p>
-        <h2>SOR 현황</h2>
+        <p>RECENT STATUS</p>
+        <h2>최근 등록 현황</h2>
       </div>
-      <div class="sor-grid" id="mobileSorCards"></div>
-    </section>
-
-    <section class="tab-view" id="tab-kpi">
-      <div class="section-head">
-        <p>KPI</p>
-        <h2>품질관리 KPI</h2>
-      </div>
-      <div class="kpi-grid" id="mobileKpiCards"></div>
+      <div class="status-list" id="mobileStatusList"></div>
     </section>
   </main>
 
@@ -160,25 +166,25 @@
       <span>⌂</span>
       홈
     </button>
-    <button class="bottom-nav-button" type="button" data-tab="status">
-      <span>≡</span>
-      현황
+    <button class="bottom-nav-button" type="button" data-tab="compression">
+      <span>▣</span>
+      압축강도
+    </button>
+    <button class="bottom-nav-button" type="button" data-tab="material">
+      <span>▤</span>
+      자재승인
     </button>
     <button class="bottom-nav-button" type="button" data-tab="photo">
       <span>＋</span>
       등록
     </button>
-    <button class="bottom-nav-button" type="button" data-tab="sor">
-      <span>!</span>
-      SOR
-    </button>
-    <button class="bottom-nav-button" type="button" data-tab="kpi">
-      <span>▥</span>
-      KPI
+    <button class="bottom-nav-button" type="button" data-tab="status">
+      <span>≡</span>
+      현황
     </button>
   </nav>
 
   <div class="mobile-toast" id="mobileToast" role="status" aria-live="polite"></div>
-  <script src="./mobile.js?v=20260604-mobile-dashboard1"></script>
+  <script src="./mobile.js?v=20260604-mobile-core1"></script>
 </body>
 </html>
