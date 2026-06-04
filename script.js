@@ -39,6 +39,78 @@ const badgeMap = {
 };
 
 const pageNumbers = Object.fromEntries(menuItems.map(([key, number]) => [key, number]));
+const compressionStorageKey =
+  window.qualityPortalStorageKeys?.compressionStrength || "qualityPortal_compressionStrengthData";
+
+function readCompressionStorageData() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(compressionStorageKey) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeCompressionRecord(record) {
+  const rawAverageStrength = record.averageStrength || record.formRemovalStrength || record.day28Strength || "";
+  const averageStrength = rawAverageStrength === "확인 필요" ? "" : rawAverageStrength;
+  const age = record.age || "";
+  return {
+    id: record.id || `compression-${Date.now()}`,
+    category: record.category || "압축강도",
+    testType: record.testType || (age === "1일" ? "해체강도" : age === "28일" ? "28일 강도" : ""),
+    location: record.location || record.pouringArea || "확인 필요",
+    spec: record.spec || "확인 필요",
+    age,
+    pourDate: record.pourDate || record.pouringDate || "",
+    testDate: record.testDate || "",
+    averageStrength,
+    manufacturer: record.manufacturer || "확인 필요",
+    resultStatus: record.resultStatus || (averageStrength ? "결과등록" : "결과대기"),
+    createdAt: record.createdAt || ""
+  };
+}
+
+function getCompressionResultCounts(records = readCompressionStorageData()) {
+  const normalized = records.map(normalizeCompressionRecord);
+  return {
+    total: normalized.length,
+    formRemoval: normalized.filter(item => item.testType === "해체강도").length,
+    day28: normalized.filter(item => item.testType === "28일 강도").length,
+    resultRegistered: normalized.filter(item => item.resultStatus === "결과등록").length,
+    resultPending: normalized.filter(item => item.resultStatus === "결과대기").length,
+    retest: normalized.filter(item => ["불합격", "재시험", "불합격/재시험"].includes(item.resultStatus)).length
+  };
+}
+
+function mapCompressionRecordToRow(record) {
+  const item = normalizeCompressionRecord(record);
+  return {
+    "타설일자": item.pourDate,
+    "시험일자": item.testDate,
+    "재령": item.age,
+    "타설부위": item.location,
+    "설계강도": item.spec,
+    "시험강도": item.averageStrength,
+    "판정": item.resultStatus,
+    __source: "localStorage",
+    __id: item.id
+  };
+}
+
+function syncCompressionDataFromStorage() {
+  if (!qualityPortalData.compressive) return;
+  const baseRows = qualityPortalData.compressive.rows.filter(row => row.__source !== "localStorage");
+  qualityPortalData.compressive.rows = baseRows.concat(readCompressionStorageData().map(mapCompressionRecordToRow));
+}
+
+function refreshPortalViews() {
+  syncCompressionDataFromStorage();
+  renderHomeKpis();
+  renderMenus();
+  renderStatusPages();
+  renderDashboard();
+}
 
 function iconSvg(id) {
   const icons = {
@@ -241,12 +313,12 @@ function getSummaryItems(pageKey, rows) {
     ];
   }
   if (pageKey === "compressive") {
-    const decisionRows = rows.filter(row => isDecisionValue(row["판정"]));
+    const counts = getCompressionResultCounts();
     return [
       ["시험건수", `${rows.length}건`],
-      ["7일 시험건수", `${rows.filter(row => String(row["재령"]).includes("7")).length}건`],
-      ["28일 시험건수", `${rows.filter(row => String(row["재령"]).includes("28")).length}건`],
-      ["적합률", `${rate(decisionRows.filter(row => isPass(row["판정"])).length, decisionRows.length)}%`]
+      ["해체강도", `${counts.formRemoval}건`],
+      ["28일 강도", `${counts.day28}건`],
+      ["결과등록", `${counts.resultRegistered}건`]
     ];
   }
   if (pageKey === "requestTest") {
@@ -524,9 +596,13 @@ function setupEvents() {
     const target = location.hash.slice(1) || "home";
     if (document.getElementById(target)) showView(target);
   });
+  window.addEventListener("storage", event => {
+    if (event.key === compressionStorageKey) refreshPortalViews();
+  });
 }
 
 function init() {
+  syncCompressionDataFromStorage();
   renderNavIcons();
   renderHomeKpis();
   renderMenus();
