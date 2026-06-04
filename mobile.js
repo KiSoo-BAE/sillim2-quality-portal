@@ -1,7 +1,7 @@
 const mobilePortalConfig = {
-  version: "20260604-ocr-test3",
+  version: "20260604-ocr-test4",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
-  storageKey: "sillim2MobileOcrTest3PhotoRegisterData",
+  storageKey: "sillim2MobileOcrTest4PhotoRegisterData",
   futureSync: {
     source: "mobile.html",
     target: "Tesseract.js / Google Sheets / Apps Script / OCR API",
@@ -608,9 +608,10 @@ function renderCompressionList() {
         ${dataField("규격", item.spec)}
         ${dataField("제조사", item.manufacturer)}
         ${dataField("타설일자", item.pouringDate)}
-        ${dataField("7일", item.day7)}
-        ${dataField("28일", item.day28)}
-        ${dataField("시험결과", item.result)}
+        ${dataField("시험일자", item.testDate)}
+        ${dataField("재령", item.age)}
+        ${dataField("시험구분", item.testType)}
+        ${dataField("평균강도", item.averageStrength)}
         ${dataField("상태", item.status)}
       </div>
     </article>
@@ -733,6 +734,62 @@ function makeEntry(formData) {
   };
 }
 
+function getOcrCompressionData(formData) {
+  return {
+    pouringArea: String(formData.get("ocrCompression_pouringArea") || "").trim(),
+    spec: String(formData.get("ocrCompression_spec") || "").trim(),
+    age: String(formData.get("ocrCompression_age") || "").trim(),
+    testType: String(formData.get("ocrCompression_testType") || "").trim(),
+    pouringDate: String(formData.get("ocrCompression_pouringDate") || "").trim(),
+    testDate: String(formData.get("ocrCompression_testDate") || "").trim(),
+    formRemovalStrength: String(formData.get("ocrCompression_formRemovalStrength") || "").trim(),
+    day28Strength: String(formData.get("ocrCompression_day28Strength") || "").trim(),
+    averageStrength: String(formData.get("ocrCompression_averageStrength") || "").trim(),
+    manufacturer: String(formData.get("ocrCompression_manufacturer") || "").trim()
+  };
+}
+
+function hasOcrCompressionData(data) {
+  return Object.values(data || {}).some(Boolean);
+}
+
+function validateMobileInput(formData) {
+  const ocrData = getOcrCompressionData(formData);
+  if (hasOcrCompressionData(ocrData)) return { valid: true, ocrData };
+  const title = String(formData.get("title") || "").trim();
+  const date = String(formData.get("date") || "").trim();
+  return {
+    valid: Boolean(title && date),
+    ocrData
+  };
+}
+
+function makeCompressionRecord(ocrData, formData) {
+  const age = ocrData.age;
+  const testType = ocrData.testType || (age === "1일" ? "해체강도" : age === "28일" ? "28일 강도" : "");
+  return {
+    id: `compression-${Date.now()}`,
+    pouringArea: ocrData.pouringArea || String(formData.get("location") || "").trim() || "확인 필요",
+    spec: ocrData.spec || "확인 필요",
+    manufacturer: ocrData.manufacturer || "확인 필요",
+    pouringDate: ocrData.pouringDate || "",
+    testDate: ocrData.testDate || String(formData.get("date") || "").trim(),
+    age,
+    testType,
+    formRemovalStrength: ocrData.formRemovalStrength,
+    day28Strength: ocrData.day28Strength,
+    averageStrength: ocrData.averageStrength || ocrData.formRemovalStrength || ocrData.day28Strength || "확인 필요",
+    status: "검토중",
+    source: "mobile-ocr",
+    createdAt: new Date().toISOString()
+  };
+}
+
+function disableNativeValidation(form) {
+  form.setAttribute("novalidate", "novalidate");
+  form.querySelectorAll("[required]").forEach(field => field.removeAttribute("required"));
+}
+
 function setEntryType(type) {
   selectedEntryType = type;
   const typeInfo = mobileInputTypes[type];
@@ -802,12 +859,30 @@ function setupMobilePortal() {
     });
   }
 
-  document.getElementById("mobileInputForm").addEventListener("submit", event => {
+  const mobileInputForm = document.getElementById("mobileInputForm");
+  disableNativeValidation(mobileInputForm);
+
+  mobileInputForm.addEventListener("submit", event => {
     event.preventDefault();
-    const entry = makeEntry(new FormData(event.currentTarget));
+    const formData = new FormData(event.currentTarget);
+    const validation = validateMobileInput(formData);
+    if (!validation.valid) {
+      showToast("필수 항목을 확인해주세요");
+      return;
+    }
+
+    const entry = makeEntry(formData);
     const entries = readPhotoRegisterData();
     entries.push(entry);
     writePhotoRegisterData(entries);
+
+    const hasOcrData = hasOcrCompressionData(validation.ocrData);
+    if (hasOcrData) {
+      compressionStrengthData.unshift(makeCompressionRecord(validation.ocrData, formData));
+      renderCompressionList();
+      renderMetricCards("compressionSummaryCards", compressionSummary);
+    }
+
     renderStatusList();
     event.currentTarget.reset();
     latestOcrFile = null;
@@ -815,8 +890,8 @@ function setupMobilePortal() {
     clearOcrFields();
     setOcrStatus("압축강도 보드판 사진 업로드 시 OCR 분석을 실행합니다.");
     setDefaultDate();
-    setTab("status");
-    showToast("사진 등록 데이터가 임시 저장되었습니다.");
+    setTab(hasOcrData ? "compression" : "status");
+    showToast(hasOcrData ? "압축강도 현황에 저장되었습니다" : "사진 등록 데이터가 임시 저장되었습니다.");
   });
 }
 
