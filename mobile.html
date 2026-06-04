@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./mobile.css?v=20260604-ocr-test3">
+  <link rel="stylesheet" href="./mobile.css?v=20260604-ocr-test4">
 </head>
 <body>
   <main class="mobile-shell">
@@ -112,10 +112,10 @@
           </div>
         </div>
 
-        <form id="mobileInputForm">
+        <form id="mobileInputForm" novalidate>
           <label>
             제목
-            <input type="text" name="title" placeholder="예: 28일 압축강도 공시체 사진" required>
+            <input type="text" name="title" placeholder="예: 28일 압축강도 공시체 사진">
           </label>
           <label>
             위치
@@ -127,7 +127,7 @@
           </label>
           <label>
             날짜
-            <input type="date" name="date" required>
+            <input type="date" name="date">
           </label>
           <label>
             상태
@@ -225,6 +225,6 @@
 
   <div class="mobile-toast" id="mobileToast" role="status" aria-live="polite"></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/6.0.1/tesseract.min.js"></script>
-  <script src="./mobile.js?v=20260604-ocr-test3"></script>
+  <script src="./mobile.js?v=20260604-ocr-test4"></script>
 </body>
 </html>
