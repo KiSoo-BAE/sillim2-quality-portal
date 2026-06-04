@@ -3,120 +3,182 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>모바일 품질 입력 | 신림2재정비촉진구역 주택재개발정비사업</title>
+  <title>모바일 현장 포털 | 신림2재정비촉진구역 주택재개발정비사업</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./mobile.css?v=20260604-mobile1">
+  <link rel="stylesheet" href="./mobile.css?v=20260604-mobile-dashboard1">
 </head>
 <body>
   <main class="mobile-shell">
     <header class="mobile-header">
       <div class="mobile-brand">
-        <strong>LOTTE E&amp;C</strong>
-        <span>롯데건설</span>
-      </div>
-      <div class="mobile-title">
-        <p>SMART QUALITY INPUT</p>
-        <h1>현장 품질 입력</h1>
-        <span>신림2재정비촉진구역 주택재개발정비사업</span>
-      </div>
-    </header>
-
-    <section class="status-card">
-      <div>
-        <span>현장상태</span>
-        <strong>착공 전</strong>
-      </div>
-      <p>입력 데이터는 향후 Google Sheets 또는 PC 대시보드 현황판과 연동할 수 있도록 분리 저장됩니다.</p>
-    </section>
-
-    <section class="action-panel" aria-label="모바일 입력 메뉴">
-      <button class="action-button active" type="button" data-entry-type="photo">
-        <span>01</span>
-        <strong>사진 등록</strong>
-      </button>
-      <button class="action-button" type="button" data-entry-type="qualityIssue">
-        <span>02</span>
-        <strong>품질 지적사항 등록</strong>
-      </button>
-      <button class="action-button" type="button" data-entry-type="sor">
-        <span>03</span>
-        <strong>SOR 현황 등록</strong>
-      </button>
-      <button class="action-button" type="button" data-entry-type="testStatus">
-        <span>04</span>
-        <strong>시험 현황 등록</strong>
-      </button>
-      <button class="action-button" type="button" data-entry-type="notice">
-        <span>05</span>
-        <strong>공지사항 등록</strong>
-      </button>
-      <button class="action-button" type="button" data-entry-type="completionPhoto">
-        <span>06</span>
-        <strong>완료 사진 업로드</strong>
-      </button>
-    </section>
-
-    <section class="form-card">
-      <div class="form-head">
-        <span id="selectedTypeNo">01</span>
+        <span class="brand-mark">L</span>
         <div>
-          <p>INPUT FORM</p>
-          <h2 id="selectedTypeTitle">사진 등록</h2>
+          <strong>LOTTE E&amp;C</strong>
+          <span>롯데건설</span>
         </div>
       </div>
 
-      <form id="mobileInputForm">
-        <label>
-          제목
-          <input type="text" name="title" placeholder="예: 지하층 품질 확인 사진" required>
-        </label>
-        <label>
-          위치
-          <input type="text" name="location" placeholder="예: 101동 B1F, 주차장 램프" required>
-        </label>
-        <label>
-          공종
-          <input type="text" name="trade" placeholder="예: 골조, 토공, 방수, 조경" required>
-        </label>
-        <label>
-          날짜
-          <input type="date" name="date" required>
-        </label>
-        <label>
-          상태
-          <select name="status" required>
-            <option value="등록">등록</option>
-            <option value="진행중">진행중</option>
-            <option value="검토중">검토중</option>
-            <option value="완료">완료</option>
-            <option value="지연">지연</option>
-          </select>
-        </label>
-        <label>
-          비고
-          <textarea name="note" rows="4" placeholder="현장 확인 내용 또는 조치 예정 사항을 입력하세요."></textarea>
-        </label>
-        <label class="file-input">
-          사진 업로드
-          <input type="file" name="photo" accept="image/*" capture="environment">
-          <small>JPG, PNG 등 현장 사진 파일을 첨부할 수 있습니다.</small>
-        </label>
-        <button class="save-button" type="submit">저장</button>
-      </form>
+      <div class="mobile-title">
+        <p>SMART QUALITY FIELD PORTAL</p>
+        <h1>모바일 현장 포털</h1>
+        <span>신림2재정비촉진구역 주택재개발정비사업</span>
+      </div>
+
+      <div class="mobile-status">
+        <span>현장상태</span>
+        <strong>착공 전</strong>
+      </div>
+    </header>
+
+    <nav class="mobile-tabs" aria-label="모바일 포털 탭">
+      <button class="tab-button active" type="button" data-tab="dashboard">대시보드</button>
+      <button class="tab-button" type="button" data-tab="status">현황</button>
+      <button class="tab-button" type="button" data-tab="photo">사진등록</button>
+      <button class="tab-button" type="button" data-tab="sor">SOR</button>
+      <button class="tab-button" type="button" data-tab="kpi">KPI</button>
+    </nav>
+
+    <section class="tab-view active" id="tab-dashboard">
+      <div class="section-head">
+        <p>DASHBOARD</p>
+        <h2>현장 품질 대시보드</h2>
+      </div>
+      <div class="dashboard-grid" id="mobileDashboardCards"></div>
     </section>
 
-    <section class="recent-card">
-      <div class="recent-head">
-        <h2>최근 임시 저장</h2>
-        <button type="button" id="clearEntries">초기화</button>
+    <section class="tab-view" id="tab-status">
+      <div class="section-head">
+        <p>STATUS</p>
+        <h2>최근 등록 현황</h2>
       </div>
-      <div id="recentEntries" class="recent-list"></div>
+      <div class="status-list" id="mobileStatusList"></div>
+    </section>
+
+    <section class="tab-view" id="tab-photo">
+      <div class="section-head">
+        <p>FIELD INPUT</p>
+        <h2>현장 등록</h2>
+      </div>
+
+      <div class="action-panel" aria-label="등록 유형 선택">
+        <button class="action-button active" type="button" data-entry-type="photo">
+          <span>01</span>
+          <strong>사진 등록</strong>
+        </button>
+        <button class="action-button" type="button" data-entry-type="qualityIssue">
+          <span>02</span>
+          <strong>품질 지적사항 등록</strong>
+        </button>
+        <button class="action-button" type="button" data-entry-type="sor">
+          <span>03</span>
+          <strong>SOR 현황 등록</strong>
+        </button>
+        <button class="action-button" type="button" data-entry-type="testStatus">
+          <span>04</span>
+          <strong>시험 현황 등록</strong>
+        </button>
+        <button class="action-button" type="button" data-entry-type="notice">
+          <span>05</span>
+          <strong>공지사항 등록</strong>
+        </button>
+        <button class="action-button" type="button" data-entry-type="completionPhoto">
+          <span>06</span>
+          <strong>완료 사진 업로드</strong>
+        </button>
+      </div>
+
+      <section class="form-card">
+        <div class="form-head">
+          <span id="selectedTypeNo">01</span>
+          <div>
+            <p>SELECTED INPUT</p>
+            <h2 id="selectedTypeTitle">사진 등록</h2>
+          </div>
+        </div>
+
+        <form id="mobileInputForm">
+          <label>
+            제목
+            <input type="text" name="title" placeholder="예: 현장 전경 사진" required>
+          </label>
+          <label>
+            위치
+            <input type="text" name="location" placeholder="예: 품질시험실 / 지하 1층">
+          </label>
+          <label>
+            공종
+            <input type="text" name="trade" placeholder="예: 건축 / 토목 / 조경">
+          </label>
+          <label>
+            날짜
+            <input type="date" name="date" required>
+          </label>
+          <label>
+            상태
+            <select name="status">
+              <option value="등록">등록</option>
+              <option value="진행중">진행중</option>
+              <option value="완료">완료</option>
+              <option value="미조치">미조치</option>
+            </select>
+          </label>
+          <label>
+            비고
+            <textarea name="note" placeholder="현장 확인 사항을 입력하세요."></textarea>
+          </label>
+          <label class="file-input">
+            사진 업로드
+            <input type="file" name="photo" accept="image/*,.jpg,.jpeg,.png,.pdf">
+            <small>사진 또는 PDF 파일을 선택할 수 있습니다.</small>
+          </label>
+          <button class="save-button" type="submit">저장</button>
+        </form>
+      </section>
+    </section>
+
+    <section class="tab-view" id="tab-sor">
+      <div class="section-head">
+        <p>SOR STATUS</p>
+        <h2>SOR 현황</h2>
+      </div>
+      <div class="sor-grid" id="mobileSorCards"></div>
+    </section>
+
+    <section class="tab-view" id="tab-kpi">
+      <div class="section-head">
+        <p>KPI</p>
+        <h2>품질관리 KPI</h2>
+      </div>
+      <div class="kpi-grid" id="mobileKpiCards"></div>
     </section>
   </main>
 
+  <nav class="bottom-nav" aria-label="모바일 하단 내비게이션">
+    <button class="bottom-nav-button active" type="button" data-tab="dashboard">
+      <span>⌂</span>
+      홈
+    </button>
+    <button class="bottom-nav-button" type="button" data-tab="status">
+      <span>≡</span>
+      현황
+    </button>
+    <button class="bottom-nav-button" type="button" data-tab="photo">
+      <span>＋</span>
+      등록
+    </button>
+    <button class="bottom-nav-button" type="button" data-tab="sor">
+      <span>!</span>
+      SOR
+    </button>
+    <button class="bottom-nav-button" type="button" data-tab="kpi">
+      <span>▥</span>
+      KPI
+    </button>
+  </nav>
+
   <div class="mobile-toast" id="mobileToast" role="status" aria-live="polite"></div>
-  <script src="./mobile.js?v=20260604-mobile1"></script>
+  <script src="./mobile.js?v=20260604-mobile-dashboard1"></script>
 </body>
 </html>
