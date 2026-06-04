@@ -1,51 +1,58 @@
 const mobilePortalConfig = {
-  version: "20260604-mobile-dashboard1",
+  version: "20260604-mobile-core1",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
-  storageKey: "sillim2MobileQualityPortalEntries",
+  storageKey: "sillim2MobileCorePhotoRegisterData",
   futureSync: {
     source: "mobile.html",
     target: "Google Sheets / Apps Script / OCR API",
-    note: "모바일 입력 데이터는 향후 PC 현황판 및 KPI 대시보드와 연동할 수 있도록 독립 구조로 저장합니다."
+    note: "압축강도, 자재승인, 사진등록 데이터를 분리해 향후 PC 현황판과 KPI로 연동할 수 있도록 구성합니다."
   }
 };
 
+const compressionStrengthData = [];
+const materialApprovalData = [];
+let photoRegisterData = [];
+
 const mobileDashboardCards = [
-  { no: "01", id: "readyMix", title: "레미콘 타설현황", icon: "truck" },
-  { no: "02", id: "materialArch", title: "자재공급원승인(건축)", icon: "clipboard" },
-  { no: "03", id: "materialCivil", title: "자재공급원승인(토목)", icon: "rebar" },
-  { no: "04", id: "materialLandscape", title: "자재공급원승인(조경)", icon: "leaf" },
-  { no: "05", id: "compressive", title: "콘크리트 압축강도", icon: "cube" },
-  { no: "06", id: "requestTest", title: "의뢰시험현황", icon: "flask" },
-  { no: "07", id: "nonconformity", title: "품질부적합사항", icon: "shield" },
-  { no: "08", id: "dashboard", title: "KPI 대시보드", icon: "chart" }
+  { no: "01", id: "compressive", title: "콘크리트 압축강도", icon: "cube" },
+  { no: "02", id: "materialApproval", title: "자재공급원 승인", icon: "clipboard" },
+  { no: "03", id: "readyMix", title: "레미콘 타설현황", icon: "truck" },
+  { no: "04", id: "requestTest", title: "의뢰시험현황", icon: "flask" },
+  { no: "05", id: "materialArch", title: "자재승인(건축)", icon: "building" },
+  { no: "06", id: "materialCivil", title: "자재승인(토목)", icon: "rebar" },
+  { no: "07", id: "materialLandscape", title: "자재승인(조경)", icon: "leaf" },
+  { no: "08", id: "photoRegister", title: "사진등록 현황", icon: "camera" }
 ];
 
-const mobileKpiCards = [
-  { title: "자재승인 건수", value: 0, unit: "건", foot: "누계 / 목표 0 / 0건" },
-  { title: "의뢰시험 적합률", value: 0, unit: "%", foot: "누계 / 목표 0% / 0%" },
-  { title: "품질부적합 발생건수", value: 0, unit: "건", foot: "누계 / 목표 0 / 0건" },
-  { title: "조치완료율", value: 0, unit: "%", foot: "누계 / 목표 0% / 0%" },
-  { title: "품질 우수관리 일수", value: 0, unit: "일", foot: "누계 / 목표 0 / 0일" }
+const compressionSummary = [
+  { title: "오늘 시험 예정", value: 0, unit: "건", foot: "착공 전 등록 없음" },
+  { title: "7일 강도", value: 0, unit: "건", foot: "7일 재령 시험 없음" },
+  { title: "28일 강도", value: 0, unit: "건", foot: "28일 재령 시험 없음" },
+  { title: "미시험", value: 0, unit: "건", foot: "미시험 항목 없음" },
+  { title: "결과 대기", value: 0, unit: "건", foot: "결과 대기 없음" },
+  { title: "불합격/재시험", value: 0, unit: "건", foot: "재시험 항목 없음", bad: true }
 ];
 
-const mobileSorCards = [
-  { title: "전체 SOR", value: 0, unit: "건", foot: "착공 전 등록 없음" },
-  { title: "미실시", value: 0, unit: "건", foot: "미실시 항목 없음" },
-  { title: "진행중", value: 0, unit: "건", foot: "진행중 항목 없음" },
-  { title: "완료", value: 0, unit: "건", foot: "완료 항목 없음" },
-  { title: "Due Date 임박", value: 0, unit: "건", foot: "임박 항목 없음", warning: true }
+const materialSummary = [
+  { title: "승인 요청", value: 0, unit: "건", foot: "요청 항목 없음" },
+  { title: "검토중", value: 0, unit: "건", foot: "검토중 항목 없음" },
+  { title: "승인완료", value: 0, unit: "건", foot: "승인완료 없음" },
+  { title: "보완요청", value: 0, unit: "건", foot: "보완요청 없음" },
+  { title: "반려", value: 0, unit: "건", foot: "반려 항목 없음", bad: true },
+  { title: "기한임박", value: 0, unit: "건", foot: "기한임박 없음", warning: true }
 ];
 
 const mobileInputTypes = {
-  photo: { no: "01", label: "사진 등록", syncTarget: "sitePhotos" },
-  qualityIssue: { no: "02", label: "품질 지적사항 등록", syncTarget: "nonconformity" },
-  sor: { no: "03", label: "SOR 현황 등록", syncTarget: "sorStatus" },
-  testStatus: { no: "04", label: "시험 현황 등록", syncTarget: "requestTest" },
-  notice: { no: "05", label: "공지사항 등록", syncTarget: "notice" },
-  completionPhoto: { no: "06", label: "완료 사진 업로드", syncTarget: "completionPhotos" }
+  specimenPhoto: { no: "01", label: "공시체 사진", syncTarget: "compressionStrengthData" },
+  compressionTestPhoto: { no: "02", label: "압축강도 시험 사진", syncTarget: "compressionStrengthData" },
+  testReportPhoto: { no: "03", label: "시험성적서 사진", syncTarget: "photoRegisterData" },
+  pouringAreaPhoto: { no: "04", label: "타설부위 사진", syncTarget: "compressionStrengthData" },
+  approvalDocPhoto: { no: "05", label: "자재승인서 사진", syncTarget: "materialApprovalData" },
+  materialInspectionPhoto: { no: "06", label: "자재검수 사진", syncTarget: "materialApprovalData" },
+  ksCertificatePhoto: { no: "07", label: "시험성적서/KS인증서 사진", syncTarget: "materialApprovalData" }
 };
 
-let selectedEntryType = "photo";
+let selectedEntryType = "specimenPhoto";
 
 function iconSvg(name) {
   const icons = {
@@ -55,13 +62,13 @@ function iconSvg(name) {
     leaf: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 53V30"/><path d="M32 30c-12 0-19-8-19-20 13 1 21 8 21 20"/><path d="M32 35c10-1 17-8 18-19-12 1-19 8-18 19"/><path d="M21 24c5 2 9 5 11 10"/></svg>`,
     cube: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="m32 9 22 12v24L32 57 10 45V21z"/><path d="m10 21 22 12 22-12"/><path d="M32 33v24"/><path d="m21 15 22 12"/></svg>`,
     flask: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M25 10h14"/><path d="M29 10v18L17 51c-2 4 1 7 5 7h20c4 0 7-3 5-7L35 28V10"/><path d="M24 43h16"/></svg>`,
-    shield: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 8 51 16v14c0 13-8 23-19 28-11-5-19-15-19-28V16z"/><path d="M32 22v15"/><path d="M32 45h.1"/></svg>`,
-    chart: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13 52h40"/><path d="M18 52V36h8v16"/><path d="M31 52V25h8v27"/><path d="M44 52V14h8v38"/></svg>`
+    building: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M16 54V14h28v40"/><path d="M44 28h8v26"/><path d="M23 22h5M32 22h5M23 31h5M32 31h5M23 40h5M32 40h5"/><path d="M12 54h44"/></svg>`,
+    camera: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M14 23h10l4-6h8l4 6h10v27H14z"/><path d="M32 44a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/><path d="M46 29h.1"/></svg>`
   };
-  return icons[name] || icons.chart;
+  return icons[name] || icons.clipboard;
 }
 
-function readEntries() {
+function readPhotoRegisterData() {
   try {
     const parsed = JSON.parse(localStorage.getItem(mobilePortalConfig.storageKey) || "[]");
     return Array.isArray(parsed) ? parsed : [];
@@ -70,7 +77,8 @@ function readEntries() {
   }
 }
 
-function writeEntries(entries) {
+function writePhotoRegisterData(entries) {
+  photoRegisterData = entries;
   localStorage.setItem(mobilePortalConfig.storageKey, JSON.stringify(entries));
 }
 
@@ -97,45 +105,98 @@ function renderDashboardCards() {
   `).join("");
 }
 
-function renderKpiCards() {
-  const target = document.getElementById("mobileKpiCards");
-  target.innerHTML = mobileKpiCards.map(card => `
-    <article class="mobile-kpi-card">
+function renderMetricCards(targetId, cards) {
+  const target = document.getElementById(targetId);
+  target.innerHTML = cards.map(card => `
+    <article class="metric-card${card.warning ? " warning" : ""}${card.bad ? " bad" : ""}">
       <h3>${card.title}</h3>
-      <div class="kpi-value"><strong>${card.value}</strong>${card.unit}</div>
-      <div class="kpi-foot">${card.foot}</div>
+      <div class="metric-value"><strong>${card.value}</strong>${card.unit}</div>
+      <div class="metric-foot">${card.foot}</div>
     </article>
   `).join("");
 }
 
-function renderSorCards() {
-  const target = document.getElementById("mobileSorCards");
-  target.innerHTML = mobileSorCards.map(card => `
-    <article class="mobile-sor-card${card.warning ? " warning" : ""}">
-      <h3>${card.title}</h3>
-      <div class="sor-value"><strong>${card.value}</strong>${card.unit}</div>
-      <div class="sor-foot">${card.foot}</div>
+function renderCompressionList() {
+  const target = document.getElementById("compressionList");
+  if (!compressionStrengthData.length) {
+    target.innerHTML = `
+      <article class="data-empty">
+        <strong>등록된 압축강도 데이터가 없습니다.</strong>
+        <p>착공 후 타설부위, 7일·28일 강도, 시험결과가 이곳에 표시됩니다.</p>
+      </article>
+    `;
+    return;
+  }
+
+  target.innerHTML = compressionStrengthData.map(item => `
+    <article class="data-item">
+      <h3>${escapeHtml(item.pouringArea)}</h3>
+      <div class="data-fields">
+        ${dataField("규격", item.spec)}
+        ${dataField("제조사", item.manufacturer)}
+        ${dataField("타설일자", item.pouringDate)}
+        ${dataField("7일", item.day7)}
+        ${dataField("28일", item.day28)}
+        ${dataField("시험결과", item.result)}
+        ${dataField("상태", item.status)}
+      </div>
     </article>
   `).join("");
+}
+
+function renderMaterialList() {
+  const target = document.getElementById("materialList");
+  if (!materialApprovalData.length) {
+    target.innerHTML = `
+      <article class="data-empty">
+        <strong>등록된 자재승인 데이터가 없습니다.</strong>
+        <p>착공 후 자재명, 업체명, 승인예정일, 상태가 이곳에 표시됩니다.</p>
+      </article>
+    `;
+    return;
+  }
+
+  target.innerHTML = materialApprovalData.map(item => `
+    <article class="data-item">
+      <h3>${escapeHtml(item.materialName)}</h3>
+      <div class="data-fields">
+        ${dataField("업체명", item.company)}
+        ${dataField("공종", item.trade)}
+        ${dataField("제출일", item.submitDate)}
+        ${dataField("승인예정일", item.expectedApprovalDate)}
+        ${dataField("상태", item.status)}
+        ${dataField("비고", item.note)}
+      </div>
+    </article>
+  `).join("");
+}
+
+function dataField(label, value) {
+  return `
+    <div class="data-field">
+      <span>${label}</span>
+      <strong>${escapeHtml(value || "-")}</strong>
+    </div>
+  `;
 }
 
 function statusClass(status) {
-  if (status === "완료") return "done";
-  if (status === "미조치") return "bad";
-  if (status === "진행중") return "open";
+  if (status === "완료" || status === "승인완료") return "done";
+  if (status === "보완요청" || status === "반려" || status === "불합격") return "bad";
+  if (status === "검토중" || status === "진행중") return "open";
   return "";
 }
 
 function renderStatusList() {
   const target = document.getElementById("mobileStatusList");
-  const entries = readEntries().slice().reverse();
+  const entries = readPhotoRegisterData().slice().reverse();
 
   if (!entries.length) {
     target.innerHTML = `
       <article class="status-empty">
         <div class="status-thumb">PHOTO</div>
-        <strong>등록된 현장 데이터가 없습니다.</strong>
-        <p>사진등록 탭에서 저장한 항목이 이곳에 최근 현황으로 표시됩니다.</p>
+        <strong>등록된 사진 데이터가 없습니다.</strong>
+        <p>사진등록 탭에서 저장한 공시체, 압축강도, 자재승인 관련 사진이 이곳에 표시됩니다.</p>
       </article>
     `;
     return;
@@ -147,6 +208,7 @@ function renderStatusList() {
       <div class="status-body">
         <h3>${escapeHtml(entry.title || "제목 없음")}</h3>
         <div class="status-meta">
+          <span>유형: ${escapeHtml(entry.entryTypeLabel)}</span>
           <span>위치: ${escapeHtml(entry.location || "미입력")}</span>
           <span>공종: ${escapeHtml(entry.trade || "미입력")}</span>
           <span>등록일: ${escapeHtml(entry.date || entry.createdAt.slice(0, 10))}</span>
@@ -161,7 +223,7 @@ function makeEntry(formData) {
   const typeInfo = mobileInputTypes[selectedEntryType];
   const photo = formData.get("photo");
   return {
-    id: `mobile-${Date.now()}`,
+    id: `mobile-core-${Date.now()}`,
     schemaVersion: mobilePortalConfig.version,
     entryType: selectedEntryType,
     entryTypeLabel: typeInfo.label,
@@ -219,9 +281,12 @@ function setDefaultDate() {
 }
 
 function setupMobilePortal() {
+  photoRegisterData = readPhotoRegisterData();
   renderDashboardCards();
-  renderKpiCards();
-  renderSorCards();
+  renderMetricCards("compressionSummaryCards", compressionSummary);
+  renderMetricCards("materialSummaryCards", materialSummary);
+  renderCompressionList();
+  renderMaterialList();
   renderStatusList();
   setDefaultDate();
   setEntryType(selectedEntryType);
@@ -237,25 +302,30 @@ function setupMobilePortal() {
   document.getElementById("mobileInputForm").addEventListener("submit", event => {
     event.preventDefault();
     const entry = makeEntry(new FormData(event.currentTarget));
-    const entries = readEntries();
+    const entries = readPhotoRegisterData();
     entries.push(entry);
-    writeEntries(entries);
+    writePhotoRegisterData(entries);
     renderStatusList();
     event.currentTarget.reset();
     setDefaultDate();
     setTab("status");
-    showToast("모바일 현장 데이터가 임시 저장되었습니다.");
+    showToast("사진 등록 데이터가 임시 저장되었습니다.");
   });
 }
 
 window.mobileQualityPortalStore = {
   config: mobilePortalConfig,
+  compressionStrengthData,
+  materialApprovalData,
+  get photoRegisterData() {
+    return readPhotoRegisterData();
+  },
   dashboardCards: mobileDashboardCards,
-  kpiCards: mobileKpiCards,
-  sorCards: mobileSorCards,
+  compressionSummary,
+  materialSummary,
   inputTypes: mobileInputTypes,
-  readEntries,
-  writeEntries
+  readPhotoRegisterData,
+  writePhotoRegisterData
 };
 
 document.addEventListener("DOMContentLoaded", setupMobilePortal);
