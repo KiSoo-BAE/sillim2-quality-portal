@@ -49,3 +49,9 @@ const qualityPortalData = {
     rows: []
   }
 };
+
+const qualityPortalStorageKeys = {
+  // Same browser/device sync uses localStorage. Cross-device sync can later be
+  // replaced with Google Sheets, Apps Script, or another backend API.
+  compressionStrength: "qualityPortal_compressionStrengthData"
+};
