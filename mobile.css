@@ -677,6 +677,29 @@ textarea:focus {
   font-weight: 900;
 }
 
+.ocr-status-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.ocr-test-button {
+  width: fit-content;
+  min-height: 38px;
+  padding: 0 13px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.ocr-test-button:disabled {
+  cursor: not-allowed;
+  background: #D0D5DD;
+  color: #667085;
+}
+
 #ocrStatus.is-running {
   background: #EAF2FF;
   color: var(--blue);
@@ -690,6 +713,53 @@ textarea:focus {
 #ocrStatus.is-error {
   background: var(--red-soft);
   color: var(--lotte-red);
+}
+
+#ocrConfidenceStatus {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 30px;
+  padding: 0 10px;
+  background: #EEF2F6;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+#ocrConfidenceStatus.is-success {
+  background: #ECFDF3;
+  color: var(--green);
+}
+
+#ocrConfidenceStatus.is-review {
+  background: #FFF4E5;
+  color: var(--orange);
+}
+
+#ocrConfidenceStatus.is-error {
+  background: var(--red-soft);
+  color: var(--lotte-red);
+}
+
+.ocr-raw-box {
+  background: #fff;
+  border: 1px solid #EEF0F3;
+}
+
+.ocr-raw-box summary {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ocr-raw-box label {
+  padding: 0 12px 12px;
 }
 
 .ocr-section {
