@@ -1,15 +1,16 @@
 const mobilePortalConfig = {
-  version: "20260604-ocr-test4",
+  version: "20260604-data-sync-local1",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
   storageKey: "sillim2MobileOcrTest4PhotoRegisterData",
+  compressionStorageKey: "qualityPortal_compressionStrengthData",
   futureSync: {
     source: "mobile.html",
     target: "Tesseract.js / Google Sheets / Apps Script / OCR API",
-    note: "압축강도 보드판 OCR 결과는 검증용으로 표시하고, 사용자가 확인 및 수정한 뒤 저장 버튼을 눌렀을 때만 사진등록 데이터에 포함합니다."
+    note: "같은 브라우저/기기에서는 localStorage로 PC·모바일을 동기화하고, 다른 기기 간 연동은 추후 Google Sheets 또는 Apps Script로 확장합니다."
   }
 };
 
-const compressionStrengthData = [];
+let compressionStrengthData = [];
 const materialApprovalData = [];
 let photoRegisterData = [];
 
@@ -22,15 +23,6 @@ const mobileDashboardCards = [
   { no: "06", id: "materialCivil", title: "자재승인(토목)", icon: "rebar" },
   { no: "07", id: "materialLandscape", title: "자재승인(조경)", icon: "leaf" },
   { no: "08", id: "photoRegister", title: "사진등록 현황", icon: "camera" }
-];
-
-const compressionSummary = [
-  { title: "오늘 시험 예정", value: 0, unit: "건", foot: "착공 전 등록 없음" },
-  { title: "7일 강도", value: 0, unit: "건", foot: "7일 재령 시험 없음" },
-  { title: "28일 강도", value: 0, unit: "건", foot: "28일 재령 시험 없음" },
-  { title: "미시험", value: 0, unit: "건", foot: "미시험 항목 없음" },
-  { title: "결과 대기", value: 0, unit: "건", foot: "결과 대기 없음" },
-  { title: "불합격/재시험", value: 0, unit: "건", foot: "재시험 항목 없음", bad: true }
 ];
 
 const materialSummary = [
@@ -91,6 +83,71 @@ function readPhotoRegisterData() {
 function writePhotoRegisterData(entries) {
   photoRegisterData = entries;
   localStorage.setItem(mobilePortalConfig.storageKey, JSON.stringify(entries));
+}
+
+function normalizeCompressionRecord(record) {
+  const rawAverageStrength = record.averageStrength || record.formRemovalStrength || record.day28Strength || "";
+  const averageStrength = rawAverageStrength === "확인 필요" ? "" : rawAverageStrength;
+  const age = record.age || "";
+  return {
+    id: record.id || `compression-${Date.now()}`,
+    category: record.category || "압축강도",
+    testType: record.testType || (age === "1일" ? "해체강도" : age === "28일" ? "28일 강도" : ""),
+    location: record.location || record.pouringArea || "확인 필요",
+    spec: record.spec || "확인 필요",
+    age,
+    pourDate: record.pourDate || record.pouringDate || "",
+    testDate: record.testDate || "",
+    averageStrength,
+    manufacturer: record.manufacturer || "확인 필요",
+    resultStatus: record.resultStatus || (averageStrength ? "결과등록" : "결과대기"),
+    createdAt: record.createdAt || ""
+  };
+}
+
+function readCompressionStrengthData() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(mobilePortalConfig.compressionStorageKey) || "[]");
+    return Array.isArray(parsed) ? parsed.map(normalizeCompressionRecord) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCompressionStrengthData(entries) {
+  compressionStrengthData = entries.map(normalizeCompressionRecord);
+  localStorage.setItem(mobilePortalConfig.compressionStorageKey, JSON.stringify(compressionStrengthData));
+}
+
+function countCompressionResults(records = compressionStrengthData) {
+  const normalized = records.map(normalizeCompressionRecord);
+  return {
+    total: normalized.length,
+    formRemoval: normalized.filter(item => item.testType === "해체강도").length,
+    day28: normalized.filter(item => item.testType === "28일 강도").length,
+    resultRegistered: normalized.filter(item => item.resultStatus === "결과등록").length,
+    resultPending: normalized.filter(item => item.resultStatus === "결과대기").length,
+    retest: normalized.filter(item => ["불합격", "재시험", "불합격/재시험"].includes(item.resultStatus)).length
+  };
+}
+
+function getCompressionSummaryCards() {
+  const counts = countCompressionResults();
+  return [
+    { title: "전체 건수", value: counts.total, unit: "건", foot: `저장된 압축강도 ${counts.total}건` },
+    { title: "해체강도", value: counts.formRemoval, unit: "건", foot: `재령 1일 ${counts.formRemoval}건` },
+    { title: "28일 강도", value: counts.day28, unit: "건", foot: `재령 28일 ${counts.day28}건` },
+    { title: "결과등록", value: counts.resultRegistered, unit: "건", foot: `평균강도 등록 ${counts.resultRegistered}건` },
+    { title: "결과대기", value: counts.resultPending, unit: "건", foot: `평균강도 미등록 ${counts.resultPending}건`, warning: counts.resultPending > 0 },
+    { title: "불합격/재시험", value: counts.retest, unit: "건", foot: `재시험 대상 ${counts.retest}건`, bad: counts.retest > 0 }
+  ];
+}
+
+function refreshCompressionViews() {
+  compressionStrengthData = readCompressionStrengthData();
+  renderDashboardCards();
+  renderMetricCards("compressionSummaryCards", getCompressionSummaryCards());
+  renderCompressionList();
 }
 
 function setOcrStatus(message, state = "") {
@@ -566,16 +623,30 @@ function escapeHtml(value) {
 
 function renderDashboardCards() {
   const target = document.getElementById("mobileDashboardCards");
-  target.innerHTML = mobileDashboardCards.map(card => `
+  const compressionCounts = countCompressionResults();
+  const getMetric = card => {
+    if (card.id === "compressive") {
+      return {
+        note: compressionCounts.total ? `결과등록 ${compressionCounts.resultRegistered}건 · 결과대기 ${compressionCounts.resultPending}건` : "등록된 데이터 없음",
+        value: compressionCounts.total
+      };
+    }
+    return { note: "등록된 데이터 없음", value: 0 };
+  };
+
+  target.innerHTML = mobileDashboardCards.map(card => {
+    const metric = getMetric(card);
+    return `
     <article class="mobile-dashboard-card">
       <span class="number-badge">${card.no}</span>
       <h3>${card.title}</h3>
       <div class="card-icon">${iconSvg(card.icon)}</div>
       <div class="card-divider"></div>
-      <div class="card-note">등록된 데이터 없음</div>
-      <div class="card-value"><strong>0</strong>건</div>
+      <div class="card-note">${metric.note}</div>
+      <div class="card-value"><strong>${metric.value}</strong>건</div>
     </article>
-  `).join("");
+  `;
+  }).join("");
 }
 
 function renderMetricCards(targetId, cards) {
@@ -603,16 +674,16 @@ function renderCompressionList() {
 
   target.innerHTML = compressionStrengthData.map(item => `
     <article class="data-item">
-      <h3>${escapeHtml(item.pouringArea)}</h3>
+      <h3>${escapeHtml(item.location)}</h3>
       <div class="data-fields">
         ${dataField("규격", item.spec)}
         ${dataField("제조사", item.manufacturer)}
-        ${dataField("타설일자", item.pouringDate)}
+        ${dataField("타설일자", item.pourDate)}
         ${dataField("시험일자", item.testDate)}
         ${dataField("재령", item.age)}
         ${dataField("시험구분", item.testType)}
         ${dataField("평균강도", item.averageStrength)}
-        ${dataField("상태", item.status)}
+        ${dataField("상태", item.resultStatus)}
       </div>
     </article>
   `).join("");
@@ -767,20 +838,19 @@ function validateMobileInput(formData) {
 function makeCompressionRecord(ocrData, formData) {
   const age = ocrData.age;
   const testType = ocrData.testType || (age === "1일" ? "해체강도" : age === "28일" ? "28일 강도" : "");
+  const averageStrength = ocrData.averageStrength || ocrData.formRemovalStrength || ocrData.day28Strength || "";
   return {
     id: `compression-${Date.now()}`,
-    pouringArea: ocrData.pouringArea || String(formData.get("location") || "").trim() || "확인 필요",
-    spec: ocrData.spec || "확인 필요",
-    manufacturer: ocrData.manufacturer || "확인 필요",
-    pouringDate: ocrData.pouringDate || "",
-    testDate: ocrData.testDate || String(formData.get("date") || "").trim(),
-    age,
+    category: "압축강도",
     testType,
-    formRemovalStrength: ocrData.formRemovalStrength,
-    day28Strength: ocrData.day28Strength,
-    averageStrength: ocrData.averageStrength || ocrData.formRemovalStrength || ocrData.day28Strength || "확인 필요",
-    status: "검토중",
-    source: "mobile-ocr",
+    location: ocrData.pouringArea || String(formData.get("location") || "").trim() || "확인 필요",
+    spec: ocrData.spec || "확인 필요",
+    age,
+    pourDate: ocrData.pouringDate || "",
+    testDate: ocrData.testDate || String(formData.get("date") || "").trim(),
+    averageStrength,
+    manufacturer: ocrData.manufacturer || "확인 필요",
+    resultStatus: averageStrength ? "결과등록" : "결과대기",
     createdAt: new Date().toISOString()
   };
 }
@@ -828,8 +898,9 @@ function setDefaultDate() {
 function setupMobilePortal() {
   document.documentElement.dataset.ocrEngine = getTesseractEngine() ? "ready" : "missing";
   photoRegisterData = readPhotoRegisterData();
+  compressionStrengthData = readCompressionStrengthData();
   renderDashboardCards();
-  renderMetricCards("compressionSummaryCards", compressionSummary);
+  renderMetricCards("compressionSummaryCards", getCompressionSummaryCards());
   renderMetricCards("materialSummaryCards", materialSummary);
   renderCompressionList();
   renderMaterialList();
@@ -878,9 +949,10 @@ function setupMobilePortal() {
 
     const hasOcrData = hasOcrCompressionData(validation.ocrData);
     if (hasOcrData) {
-      compressionStrengthData.unshift(makeCompressionRecord(validation.ocrData, formData));
-      renderCompressionList();
-      renderMetricCards("compressionSummaryCards", compressionSummary);
+      const compressionEntries = readCompressionStrengthData();
+      compressionEntries.unshift(makeCompressionRecord(validation.ocrData, formData));
+      writeCompressionStrengthData(compressionEntries);
+      refreshCompressionViews();
     }
 
     renderStatusList();
@@ -893,23 +965,34 @@ function setupMobilePortal() {
     setTab(hasOcrData ? "compression" : "status");
     showToast(hasOcrData ? "압축강도 현황에 저장되었습니다" : "사진 등록 데이터가 임시 저장되었습니다.");
   });
+
+  window.addEventListener("storage", event => {
+    if (event.key === mobilePortalConfig.compressionStorageKey) refreshCompressionViews();
+  });
 }
 
 window.mobileQualityPortalStore = {
   config: mobilePortalConfig,
-  compressionStrengthData,
   materialApprovalData,
   get photoRegisterData() {
     return readPhotoRegisterData();
   },
   dashboardCards: mobileDashboardCards,
-  compressionSummary,
+  get compressionStrengthData() {
+    return readCompressionStrengthData();
+  },
+  get compressionSummary() {
+    return getCompressionSummaryCards();
+  },
   materialSummary,
   inputTypes: mobileInputTypes,
   extractOcrKeywords,
   handlePhotoOcr,
   readPhotoRegisterData,
-  writePhotoRegisterData
+  writePhotoRegisterData,
+  readCompressionStrengthData,
+  writeCompressionStrengthData,
+  countCompressionResults
 };
 
 document.addEventListener("DOMContentLoaded", setupMobilePortal);
