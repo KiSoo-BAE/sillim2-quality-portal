@@ -1,11 +1,11 @@
 const mobilePortalConfig = {
-  version: "20260604-mobile-core1",
+  version: "20260604-ocr1",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
-  storageKey: "sillim2MobileCorePhotoRegisterData",
+  storageKey: "sillim2MobileOcrPhotoRegisterData",
   futureSync: {
     source: "mobile.html",
-    target: "Google Sheets / Apps Script / OCR API",
-    note: "압축강도, 자재승인, 사진등록 데이터를 분리해 향후 PC 현황판과 KPI로 연동할 수 있도록 구성합니다."
+    target: "Tesseract.js / Google Sheets / Apps Script / OCR API",
+    note: "OCR 결과는 사용자가 확인 및 수정한 뒤 저장 버튼을 눌렀을 때만 사진등록 데이터에 포함합니다."
   }
 };
 
@@ -80,6 +80,136 @@ function readPhotoRegisterData() {
 function writePhotoRegisterData(entries) {
   photoRegisterData = entries;
   localStorage.setItem(mobilePortalConfig.storageKey, JSON.stringify(entries));
+}
+
+function setOcrStatus(message, state = "") {
+  const status = document.getElementById("ocrStatus");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.remove("is-running", "is-success", "is-error");
+  if (state) status.classList.add(`is-${state}`);
+}
+
+function normalizeOcrText(text) {
+  return String(text || "")
+    .replace(/\r/g, "\n")
+    .replace(/[|]+/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function findKeywordValue(text, keywords) {
+  const escaped = keywords.map(keyword => keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = new RegExp(`(?:${escaped.join("|")})\\s*[:：=\\-]?\\s*([^\\n]+)`, "i");
+  const match = normalizeOcrText(text).match(pattern);
+  if (!match) return "";
+  return match[1]
+    .replace(/\s{2,}/g, " ")
+    .replace(/[|]+/g, "")
+    .trim()
+    .slice(0, 80);
+}
+
+function extractDateLike(text, keywords) {
+  const value = findKeywordValue(text, keywords);
+  const directDate = value.match(/\d{4}[.\-/년 ]+\d{1,2}[.\-/월 ]+\d{1,2}/);
+  if (directDate) return directDate[0].replace(/[년월]/g, ".").replace(/일/g, "").trim();
+  return value;
+}
+
+function extractOcrKeywords(text) {
+  return {
+    compression: {
+      pouringArea: findKeywordValue(text, ["타설부위", "타설 부위", "부위", "위치"]),
+      spec: findKeywordValue(text, ["규격", "설계강도", "강도규격", "기준강도"]),
+      manufacturer: findKeywordValue(text, ["제조사", "공급사", "업체", "레미콘사"]),
+      pouringDate: extractDateLike(text, ["타설일자", "타설일", "타설 일자"]),
+      formRemovalStrength: findKeywordValue(text, ["거푸집해체강도", "거푸집 해체강도", "해체강도"]),
+      day28Strength: findKeywordValue(text, ["28일 강도", "28일강도", "재령 28일", "28D"]),
+      result: findKeywordValue(text, ["시험결과", "결과", "판정"]),
+      status: findKeywordValue(text, ["상태", "진행상태", "처리상태"])
+    },
+    material: {
+      materialName: findKeywordValue(text, ["자재명", "품명", "재료명"]),
+      company: findKeywordValue(text, ["업체명", "제조사", "공급업체", "회사명"]),
+      trade: findKeywordValue(text, ["공종", "적용공종", "공사종류"]),
+      submitDate: extractDateLike(text, ["제출일", "제출일자", "접수일"]),
+      expectedApprovalDate: extractDateLike(text, ["승인예정일", "승인 예정일", "예정일"]),
+      status: findKeywordValue(text, ["상태", "승인상태", "진행상태"]),
+      note: findKeywordValue(text, ["비고", "특이사항", "메모"])
+    }
+  };
+}
+
+function setFormValue(name, value) {
+  const field = document.querySelector(`[name="${name}"]`);
+  if (field) field.value = value || "";
+}
+
+function populateOcrFields(result) {
+  setFormValue("ocrCompression_pouringArea", result.compression.pouringArea);
+  setFormValue("ocrCompression_spec", result.compression.spec);
+  setFormValue("ocrCompression_manufacturer", result.compression.manufacturer);
+  setFormValue("ocrCompression_pouringDate", result.compression.pouringDate);
+  setFormValue("ocrCompression_formRemovalStrength", result.compression.formRemovalStrength);
+  setFormValue("ocrCompression_day28Strength", result.compression.day28Strength);
+  setFormValue("ocrCompression_result", result.compression.result);
+  setFormValue("ocrCompression_status", result.compression.status);
+  setFormValue("ocrMaterial_materialName", result.material.materialName);
+  setFormValue("ocrMaterial_company", result.material.company);
+  setFormValue("ocrMaterial_trade", result.material.trade);
+  setFormValue("ocrMaterial_submitDate", result.material.submitDate);
+  setFormValue("ocrMaterial_expectedApprovalDate", result.material.expectedApprovalDate);
+  setFormValue("ocrMaterial_status", result.material.status);
+  setFormValue("ocrMaterial_note", result.material.note);
+}
+
+function clearOcrFields() {
+  const rawText = document.getElementById("ocrRawText");
+  if (rawText) rawText.value = "";
+  document.querySelectorAll('[name^="ocrCompression_"], [name^="ocrMaterial_"]').forEach(input => {
+    input.value = "";
+  });
+}
+
+function getTesseractEngine() {
+  return window.Tesseract || self.Tesseract;
+}
+
+async function handlePhotoOcr(file) {
+  clearOcrFields();
+  if (!file) {
+    setOcrStatus("사진 업로드 시 OCR 분석을 실행합니다.");
+    return;
+  }
+  if (!file.type.startsWith("image/")) {
+    setOcrStatus("OCR 인식 실패, 직접 입력해주세요", "error");
+    return;
+  }
+  const tesseractEngine = getTesseractEngine();
+  if (!tesseractEngine || typeof tesseractEngine.recognize !== "function") {
+    setOcrStatus("OCR 인식 실패, 직접 입력해주세요", "error");
+    return;
+  }
+
+  setOcrStatus("OCR 분석 중입니다", "running");
+  try {
+    const result = await tesseractEngine.recognize(file, "kor+eng", {
+      logger(progress) {
+        if (progress.status === "recognizing text" && Number.isFinite(progress.progress)) {
+          const percent = Math.round(progress.progress * 100);
+          setOcrStatus(`OCR 분석 중입니다 ${percent}%`, "running");
+        }
+      }
+    });
+    const text = normalizeOcrText(result?.data?.text || "");
+    document.getElementById("ocrRawText").value = text;
+    populateOcrFields(extractOcrKeywords(text));
+    setOcrStatus(text ? "OCR 분석 완료, 내용을 확인 후 저장하세요" : "OCR 인식 실패, 직접 입력해주세요", text ? "success" : "error");
+  } catch {
+    setOcrStatus("OCR 인식 실패, 직접 입력해주세요", "error");
+  }
 }
 
 function escapeHtml(value) {
@@ -234,6 +364,28 @@ function makeEntry(formData) {
     date: String(formData.get("date") || ""),
     status: String(formData.get("status") || "등록"),
     note: String(formData.get("note") || "").trim(),
+    ocr: {
+      rawText: String(formData.get("ocrRawText") || "").trim(),
+      compression: {
+        pouringArea: String(formData.get("ocrCompression_pouringArea") || "").trim(),
+        spec: String(formData.get("ocrCompression_spec") || "").trim(),
+        manufacturer: String(formData.get("ocrCompression_manufacturer") || "").trim(),
+        pouringDate: String(formData.get("ocrCompression_pouringDate") || "").trim(),
+        formRemovalStrength: String(formData.get("ocrCompression_formRemovalStrength") || "").trim(),
+        day28Strength: String(formData.get("ocrCompression_day28Strength") || "").trim(),
+        result: String(formData.get("ocrCompression_result") || "").trim(),
+        status: String(formData.get("ocrCompression_status") || "").trim()
+      },
+      material: {
+        materialName: String(formData.get("ocrMaterial_materialName") || "").trim(),
+        company: String(formData.get("ocrMaterial_company") || "").trim(),
+        trade: String(formData.get("ocrMaterial_trade") || "").trim(),
+        submitDate: String(formData.get("ocrMaterial_submitDate") || "").trim(),
+        expectedApprovalDate: String(formData.get("ocrMaterial_expectedApprovalDate") || "").trim(),
+        status: String(formData.get("ocrMaterial_status") || "").trim(),
+        note: String(formData.get("ocrMaterial_note") || "").trim()
+      }
+    },
     photo: photo && photo.name ? {
       name: photo.name,
       type: photo.type,
@@ -281,6 +433,7 @@ function setDefaultDate() {
 }
 
 function setupMobilePortal() {
+  document.documentElement.dataset.ocrEngine = getTesseractEngine() ? "ready" : "missing";
   photoRegisterData = readPhotoRegisterData();
   renderDashboardCards();
   renderMetricCards("compressionSummaryCards", compressionSummary);
@@ -299,6 +452,13 @@ function setupMobilePortal() {
     button.addEventListener("click", () => setEntryType(button.dataset.entryType));
   });
 
+  const photoInput = document.querySelector('input[name="photo"]');
+  if (photoInput) {
+    photoInput.addEventListener("change", event => {
+      handlePhotoOcr(event.currentTarget.files[0]);
+    });
+  }
+
   document.getElementById("mobileInputForm").addEventListener("submit", event => {
     event.preventDefault();
     const entry = makeEntry(new FormData(event.currentTarget));
@@ -307,6 +467,8 @@ function setupMobilePortal() {
     writePhotoRegisterData(entries);
     renderStatusList();
     event.currentTarget.reset();
+    clearOcrFields();
+    setOcrStatus("사진 업로드 시 OCR 분석을 실행합니다.");
     setDefaultDate();
     setTab("status");
     showToast("사진 등록 데이터가 임시 저장되었습니다.");
@@ -324,6 +486,8 @@ window.mobileQualityPortalStore = {
   compressionSummary,
   materialSummary,
   inputTypes: mobileInputTypes,
+  extractOcrKeywords,
+  handlePhotoOcr,
   readPhotoRegisterData,
   writePhotoRegisterData
 };
