@@ -1,5 +1,5 @@
 const mobilePortalConfig = {
-  version: "20260604-ocr-test1",
+  version: "20260604-ocr-test2",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
   storageKey: "sillim2MobileOcrTestPhotoRegisterData",
   futureSync: {
@@ -103,10 +103,29 @@ function normalizeOcrText(text) {
   return String(text || "")
     .replace(/\r/g, "\n")
     .replace(/[|]+/g, " ")
-    .replace(/\bX[123]\b/gi, "")
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function compactOcrText(text) {
+  return normalizeOcrText(text).replace(/\s+/g, " ").trim();
+}
+
+function lineAfterKeyword(text, keywords) {
+  const lines = normalizeOcrText(text).split("\n").map(line => line.trim()).filter(Boolean);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const keyword = keywords.find(item => line.includes(item));
+    if (!keyword) continue;
+    const rightSide = line.slice(line.indexOf(keyword) + keyword.length).replace(/[:：=\-]/g, " ").trim();
+    if (rightSide) return rightSide;
+    for (let offset = 1; offset <= 2; offset += 1) {
+      const nextLine = lines[index + offset] || "";
+      if (nextLine && !keywords.some(item => nextLine.includes(item))) return nextLine;
+    }
+  }
+  return "";
 }
 
 function findKeywordValue(text, keywords) {
@@ -128,19 +147,93 @@ function extractDateLike(text, keywords) {
   return value;
 }
 
+function formatDateParts(year, month, day) {
+  if (!year || !month || !day) return "";
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function extractBoardDate(text, keyword) {
+  const compact = compactOcrText(text);
+  const keywordIndex = compact.indexOf(keyword);
+  const scope = keywordIndex >= 0 ? compact.slice(keywordIndex, keywordIndex + 120) : compact;
+  const labeled = scope.match(/(20\d{2})\s*(?:년)?\s*(\d{1,2})\s*(?:월)?\s*(\d{1,2})\s*(?:일)?/);
+  if (labeled) return formatDateParts(labeled[1], labeled[2], labeled[3]);
+
+  const yearIndex = scope.indexOf("년");
+  const monthIndex = scope.indexOf("월");
+  const dayIndex = scope.indexOf("일");
+  if (yearIndex >= 0 && monthIndex > yearIndex && dayIndex > monthIndex) {
+    const year = scope.slice(Math.max(0, yearIndex - 8), yearIndex).match(/20\d{2}/)?.[0];
+    const month = scope.slice(Math.max(0, monthIndex - 4), monthIndex).match(/\d{1,2}/)?.[0];
+    const day = scope.slice(Math.max(0, dayIndex - 4), dayIndex).match(/\d{1,2}/)?.[0];
+    return formatDateParts(year, month, day);
+  }
+  return "";
+}
+
+function extractSpec(text) {
+  const compact = compactOcrText(text);
+  const match = compact.match(/\b(\d{2})\s*[-–—]\s*(\d{2,3})\s*[-–—]\s*(\d{2})\b/);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : "";
+}
+
+function extractAge(text) {
+  const compact = compactOcrText(text);
+  const match = compact.match(/재\s*령\s*[:：]?\s*(\d{1,2})\s*일/);
+  return match ? `${match[1]}일` : "";
+}
+
+function extractAverageStrength(text) {
+  const compact = compactOcrText(text);
+  const averageIndex = compact.search(/평균\s*(?:\(?\s*[XxX̄]\s*\)?)?/);
+  if (averageIndex >= 0) {
+    const scope = compact.slice(averageIndex, averageIndex + 100);
+    const mpaMatch = scope.match(/(\d{1,3}(?:\.\d+)?)\s*MPa/i);
+    if (mpaMatch) return `${mpaMatch[1]} MPa`;
+    const numericMatch = scope.match(/(\d{1,3}(?:\.\d+)?)/);
+    if (numericMatch) return `${numericMatch[1]} MPa`;
+  }
+  const fallback = compact.match(/(\d{1,3}(?:\.\d+)?)\s*MPa/i);
+  return fallback ? `${fallback[1]} MPa` : "";
+}
+
+function cleanupBoardValue(value) {
+  return String(value || "")
+    .replace(/\bX[123]\b/gi, "")
+    .replace(/평균\s*\(?\s*[XxX̄]\s*\)?/g, "")
+    .replace(/년|월|일/g, " ")
+    .split(/규\s*격|재\s*령|타설\s*일자|시험\s*일자|압축\s*강도|평균|제\s*조\s*사|제조사/)[0]
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function extractPouringArea(text) {
+  const value = lineAfterKeyword(text, ["타설부위"]);
+  const cleaned = cleanupBoardValue(value);
+  const match = cleaned.match(/(?:B|b)\s*1\s*F\s*[가-힣A-Za-z0-9()\/\- ]*/);
+  return (match ? match[0] : cleaned).replace(/\s+/g, " ").replace(/B\s*1\s*F/i, "B1F").trim();
+}
+
+function extractManufacturer(text) {
+  const value = lineAfterKeyword(text, ["제조사", "제 조 사"]);
+  return cleanupBoardValue(value).replace(/\s{2,}/g, " ").trim();
+}
+
 function extractOcrKeywords(text) {
   const normalized = normalizeOcrText(text);
+  const age = extractAge(normalized);
   return {
     compression: {
-      pouringArea: findKeywordValue(normalized, ["타설부위", "타설 부위"]),
-      spec: findKeywordValue(normalized, ["규격", "규 격", "설계강도", "강도규격"]),
-      age: findKeywordValue(normalized, ["재령", "재 령"]),
-      pouringDate: extractDateLike(normalized, ["타설일자", "타설일", "타설 일자"]),
-      testDate: extractDateLike(normalized, ["시험일자", "시험일", "시험 일자"]),
+      pouringArea: extractPouringArea(normalized) || findKeywordValue(normalized, ["타설부위", "타설 부위"]),
+      spec: extractSpec(normalized) || findKeywordValue(normalized, ["규격", "규 격", "설계강도", "강도규격"]),
+      age,
+      testType: age === "1일" ? "해체강도" : "",
+      pouringDate: extractBoardDate(normalized, "타설일자") || extractDateLike(normalized, ["타설일자", "타설일", "타설 일자"]),
+      testDate: extractBoardDate(normalized, "시험일자") || extractDateLike(normalized, ["시험일자", "시험일", "시험 일자"]),
       formRemovalStrength: findKeywordValue(normalized, ["해체강도", "해체 강도"]),
       day28Strength: findKeywordValue(normalized, ["28일 강도", "28일강도", "재령 28일", "28D"]),
-      averageStrength: findKeywordValue(normalized, ["평균강도", "평균 강도", "평균", "평균 (X)", "평균(X)"]),
-      manufacturer: findKeywordValue(normalized, ["제조사", "제 조 사", "공급사", "업체", "레미콘사"])
+      averageStrength: extractAverageStrength(normalized) || findKeywordValue(normalized, ["평균강도", "평균 강도", "평균", "평균 (X)", "평균(X)"]),
+      manufacturer: extractManufacturer(normalized) || findKeywordValue(normalized, ["제조사", "제 조 사", "공급사", "업체", "레미콘사"])
     }
   };
 }
@@ -154,6 +247,7 @@ function populateOcrFields(result) {
   setFormValue("ocrCompression_pouringArea", result.compression.pouringArea);
   setFormValue("ocrCompression_spec", result.compression.spec);
   setFormValue("ocrCompression_age", result.compression.age);
+  setFormValue("ocrCompression_testType", result.compression.testType);
   setFormValue("ocrCompression_pouringDate", result.compression.pouringDate);
   setFormValue("ocrCompression_testDate", result.compression.testDate);
   setFormValue("ocrCompression_formRemovalStrength", result.compression.formRemovalStrength);
@@ -188,6 +282,45 @@ function getTesseractEngine() {
   return window.Tesseract || self.Tesseract;
 }
 
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const reader = new FileReader();
+    reader.onload = () => {
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function preprocessImageForOcr(file) {
+  const image = await loadImageFromFile(file);
+  const scale = 2;
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  canvas.width = Math.round(image.naturalWidth * scale);
+  canvas.height = Math.round(image.naturalHeight * scale);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  const contrast = 1.35;
+  const threshold = 176;
+  for (let index = 0; index < data.length; index += 4) {
+    const gray = 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2];
+    const contrasted = Math.max(0, Math.min(255, (gray - 128) * contrast + 128));
+    const value = contrasted > threshold ? 255 : 0;
+    data[index] = value;
+    data[index + 1] = value;
+    data[index + 2] = value;
+  }
+  context.putImageData(imageData, 0, 0);
+  return canvas.toDataURL("image/png");
+}
+
 async function handlePhotoOcr(file) {
   clearOcrFields();
   latestOcrFile = file || null;
@@ -212,7 +345,8 @@ async function handlePhotoOcr(file) {
   setOcrStatus("OCR 분석 중입니다", "running");
   setOcrConfidenceStatus("확인 대기");
   try {
-    const result = await tesseractEngine.recognize(file, "kor+eng", {
+    const preprocessedImage = await preprocessImageForOcr(file).catch(() => file);
+    const result = await tesseractEngine.recognize(preprocessedImage, "kor+eng", {
       logger(progress) {
         if (progress.status === "recognizing text" && Number.isFinite(progress.progress)) {
           const percent = Math.round(progress.progress * 100);
@@ -390,6 +524,7 @@ function makeEntry(formData) {
         pouringArea: String(formData.get("ocrCompression_pouringArea") || "").trim(),
         spec: String(formData.get("ocrCompression_spec") || "").trim(),
         age: String(formData.get("ocrCompression_age") || "").trim(),
+        testType: String(formData.get("ocrCompression_testType") || "").trim(),
         pouringDate: String(formData.get("ocrCompression_pouringDate") || "").trim(),
         testDate: String(formData.get("ocrCompression_testDate") || "").trim(),
         formRemovalStrength: String(formData.get("ocrCompression_formRemovalStrength") || "").trim(),
