@@ -1,7 +1,7 @@
 const mobilePortalConfig = {
-  version: "20260604-ocr-test2",
+  version: "20260604-ocr-test3",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
-  storageKey: "sillim2MobileOcrTestPhotoRegisterData",
+  storageKey: "sillim2MobileOcrTest3PhotoRegisterData",
   futureSync: {
     source: "mobile.html",
     target: "Tesseract.js / Google Sheets / Apps Script / OCR API",
@@ -54,6 +54,16 @@ const mobileInputTypes = {
 
 let selectedEntryType = "specimenPhoto";
 let latestOcrFile = null;
+
+const boardOcrRegions = {
+  location: { label: "타설부위 값 영역", x: 0.18, y: 0.14, w: 0.60, h: 0.08 },
+  spec: { label: "규격 값 영역", x: 0.18, y: 0.22, w: 0.45, h: 0.08 },
+  age: { label: "재령 값 영역", x: 0.78, y: 0.22, w: 0.16, h: 0.08 },
+  pourDate: { label: "타설일자 년/월/일 영역", x: 0.42, y: 0.30, w: 0.36, h: 0.10 },
+  average: { label: "평균강도 값 영역", x: 0.78, y: 0.47, w: 0.18, h: 0.22 },
+  testDate: { label: "시험일자 년/월/일 영역", x: 0.42, y: 0.73, w: 0.36, h: 0.10 },
+  manufacturer: { label: "제조사 값 영역", x: 0.18, y: 0.82, w: 0.55, h: 0.08 }
+};
 
 function iconSvg(name) {
   const icons = {
@@ -207,6 +217,112 @@ function cleanupBoardValue(value) {
     .trim();
 }
 
+function cleanupRegionText(value) {
+  return String(value || "")
+    .replace(/\r/g, "\n")
+    .replace(/[|_]+/g, " ")
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+}
+
+function firstReadableLine(value) {
+  return cleanupRegionText(value)
+    .split("\n")
+    .map(line => cleanupBoardValue(line))
+    .find(Boolean) || "";
+}
+
+function parseRegionSpec(text) {
+  const compact = compactOcrText(text);
+  const match = compact.match(/\b(\d{2})\s*[-–—]\s*(\d{2,3})\s*[-–—]\s*(\d{2})\b/);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : "";
+}
+
+function parseRegionAge(text) {
+  const compact = compactOcrText(text);
+  const match = compact.match(/(\d{1,2})\s*일/) || compact.match(/(\d{1,2})/);
+  return match ? `${match[1]}일` : "";
+}
+
+function parseRegionDate(text) {
+  const compact = compactOcrText(text);
+  const direct = compact.match(/(20\d{2})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (direct) return formatDateParts(direct[1], direct[2], direct[3]);
+  const numbers = compact.match(/\d+/g) || [];
+  const yearIndex = numbers.findIndex(number => /^20\d{2}$/.test(number));
+  if (yearIndex >= 0 && numbers[yearIndex + 1] && numbers[yearIndex + 2]) {
+    return formatDateParts(numbers[yearIndex], numbers[yearIndex + 1], numbers[yearIndex + 2]);
+  }
+  if (numbers.length >= 3) return formatDateParts(numbers[0], numbers[1], numbers[2]);
+  return "";
+}
+
+function parseRegionAverage(text) {
+  const compact = compactOcrText(text);
+  const mpaMatch = compact.match(/(\d{1,3}(?:\.\d+)?)\s*MPa/i);
+  if (mpaMatch) return `${mpaMatch[1]} MPa`;
+  const decimalNumbers = compact.match(/\d{1,3}\.\d+/g) || [];
+  if (decimalNumbers.length) return `${decimalNumbers[decimalNumbers.length - 1]} MPa`;
+  const integerMatch = compact.match(/\d{1,3}/);
+  return integerMatch ? `${integerMatch[0]} MPa` : "";
+}
+
+function parseRegionLocation(text) {
+  const value = cleanupRegionText(text).replace(/타설\s*부위/g, " ").trim() || firstReadableLine(text);
+  return value.replace(/B\s*1\s*F/i, "B1F").trim();
+}
+
+function parseRegionManufacturer(text) {
+  const value = cleanupRegionText(text).replace(/제\s*조\s*사|제조사/g, " ").trim() || firstReadableLine(text);
+  return value.replace(/\s{2,}/g, " ").trim();
+}
+
+function buildRegionDebugText(regionTexts, fallbackText = "") {
+  const lines = ["[영역별 OCR 원문]"];
+  Object.entries(boardOcrRegions).forEach(([key, region]) => {
+    lines.push(`\n## ${region.label} (${key})`);
+    lines.push(cleanupRegionText(regionTexts[key] || "(인식 없음)"));
+  });
+  if (fallbackText) {
+    lines.push("\n[Fallback 전체 OCR 원문]");
+    lines.push(normalizeOcrText(fallbackText));
+  }
+  return lines.join("\n");
+}
+
+function extractBoardRegions(regionTexts) {
+  const age = parseRegionAge(regionTexts.age);
+  return {
+    compression: {
+      pouringArea: parseRegionLocation(regionTexts.location),
+      spec: parseRegionSpec(regionTexts.spec),
+      age,
+      testType: age === "1일" ? "해체강도" : age === "28일" ? "28일 강도" : "",
+      pouringDate: parseRegionDate(regionTexts.pourDate),
+      testDate: parseRegionDate(regionTexts.testDate),
+      formRemovalStrength: "",
+      day28Strength: age === "28일" ? parseRegionAverage(regionTexts.average) : "",
+      averageStrength: parseRegionAverage(regionTexts.average),
+      manufacturer: parseRegionManufacturer(regionTexts.manufacturer)
+    }
+  };
+}
+
+function mergeMissingExtraction(primary, fallback) {
+  const merged = { compression: { ...primary.compression } };
+  Object.entries(fallback?.compression || {}).forEach(([key, value]) => {
+    if (!merged.compression[key] && value) merged.compression[key] = value;
+  });
+  if (!merged.compression.testType && merged.compression.age === "1일") merged.compression.testType = "해체강도";
+  if (!merged.compression.testType && merged.compression.age === "28일") merged.compression.testType = "28일 강도";
+  return merged;
+}
+
+function countFilledExtraction(result) {
+  return Object.values(result?.compression || {}).filter(Boolean).length;
+}
+
 function extractPouringArea(text) {
   const value = lineAfterKeyword(text, ["타설부위"]);
   const cleaned = cleanupBoardValue(value);
@@ -298,6 +414,10 @@ function loadImageFromFile(file) {
 
 async function preprocessImageForOcr(file) {
   const image = await loadImageFromFile(file);
+  return preprocessImageElementForOcr(image);
+}
+
+function preprocessImageElementForOcr(image) {
   const scale = 2;
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { willReadFrequently: true });
@@ -319,6 +439,70 @@ async function preprocessImageForOcr(file) {
   }
   context.putImageData(imageData, 0, 0);
   return canvas.toDataURL("image/png");
+}
+
+function drawImageToCanvas(image) {
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  canvas.getContext("2d").drawImage(image, 0, 0);
+  return canvas;
+}
+
+function cropBoardRegionToCanvas(sourceCanvas, region) {
+  const padding = 0.01;
+  const sx = Math.max(0, Math.round((region.x - padding) * sourceCanvas.width));
+  const sy = Math.max(0, Math.round((region.y - padding) * sourceCanvas.height));
+  const sw = Math.min(sourceCanvas.width - sx, Math.round((region.w + padding * 2) * sourceCanvas.width));
+  const sh = Math.min(sourceCanvas.height - sy, Math.round((region.h + padding * 2) * sourceCanvas.height));
+  const scale = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, sw * scale);
+  canvas.height = Math.max(1, sh * scale);
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  const contrast = 1.45;
+  const threshold = 170;
+  for (let index = 0; index < data.length; index += 4) {
+    const gray = 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2];
+    const contrasted = Math.max(0, Math.min(255, (gray - 128) * contrast + 128));
+    const value = contrasted > threshold ? 255 : 0;
+    data[index] = value;
+    data[index + 1] = value;
+    data[index + 2] = value;
+  }
+  context.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+async function recognizeImage(tesseractEngine, imageSource, logger) {
+  const result = await tesseractEngine.recognize(imageSource, "kor+eng", {
+    logger,
+    tessedit_pageseg_mode: "6"
+  });
+  return normalizeOcrText(result?.data?.text || "");
+}
+
+async function recognizeBoardRegions(file, tesseractEngine) {
+  const image = await loadImageFromFile(file);
+  const sourceCanvas = drawImageToCanvas(image);
+  const regionTexts = {};
+  const entries = Object.entries(boardOcrRegions);
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const [key, region] = entries[index];
+    setOcrStatus(`영역별 OCR 분석 중입니다 ${index + 1}/${entries.length}`, "running");
+    const croppedCanvas = cropBoardRegionToCanvas(sourceCanvas, region);
+    regionTexts[key] = await recognizeImage(tesseractEngine, croppedCanvas.toDataURL("image/png"));
+  }
+
+  return {
+    regionTexts,
+    extracted: extractBoardRegions(regionTexts)
+  };
 }
 
 async function handlePhotoOcr(file) {
@@ -345,21 +529,26 @@ async function handlePhotoOcr(file) {
   setOcrStatus("OCR 분석 중입니다", "running");
   setOcrConfidenceStatus("확인 대기");
   try {
-    const preprocessedImage = await preprocessImageForOcr(file).catch(() => file);
-    const result = await tesseractEngine.recognize(preprocessedImage, "kor+eng", {
-      logger(progress) {
+    const regionResult = await recognizeBoardRegions(file, tesseractEngine);
+    let extracted = regionResult.extracted;
+    let fallbackText = "";
+
+    if (countFilledExtraction(extracted) < 3) {
+      const preprocessedImage = await preprocessImageForOcr(file).catch(() => file);
+      fallbackText = await recognizeImage(tesseractEngine, preprocessedImage, progress => {
         if (progress.status === "recognizing text" && Number.isFinite(progress.progress)) {
           const percent = Math.round(progress.progress * 100);
-          setOcrStatus(`OCR 분석 중입니다 ${percent}%`, "running");
+          setOcrStatus(`Fallback OCR 분석 중입니다 ${percent}%`, "running");
         }
-      }
-    });
-    const text = normalizeOcrText(result?.data?.text || "");
-    document.getElementById("ocrRawText").value = text;
-    const extracted = extractOcrKeywords(text);
+      });
+      extracted = mergeMissingExtraction(extracted, extractOcrKeywords(fallbackText));
+    }
+
+    document.getElementById("ocrRawText").value = buildRegionDebugText(regionResult.regionTexts, fallbackText);
     populateOcrFields(extracted);
-    setOcrStatus(text ? "OCR 분석 완료, 추출값을 검증 후 저장하세요" : "OCR 인식 실패, 직접 입력해주세요", text ? "success" : "error");
-    if (!text) setOcrConfidenceStatus("인식 실패", "error");
+    const filledCount = countFilledExtraction(extracted);
+    setOcrStatus(filledCount ? "영역별 OCR 분석 완료, 추출값을 검증 후 저장하세요" : "OCR 인식 실패, 직접 입력해주세요", filledCount ? "success" : "error");
+    if (!filledCount) setOcrConfidenceStatus("인식 실패", "error");
   } catch {
     setOcrStatus("OCR 인식 실패, 직접 입력해주세요", "error");
     setOcrConfidenceStatus("인식 실패", "error");
