@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=20260604-cleanup1">
+  <link rel="stylesheet" href="./style.css?v=20260604-cleanup3">
 </head>
 <body>
   <div class="site-shell">
@@ -35,10 +35,13 @@
         <button class="menu-close" type="button" aria-label="메뉴 닫기">×</button>
         <a class="nav-link active" href="#home" data-target="home"><span>00</span> HOME</a>
         <a class="nav-link" href="#readyMix" data-target="readyMix"><span>01</span> 콘크리트 타설현황</a>
-        <a class="nav-link" href="#compressive" data-target="compressive"><span>02</span> 콘크리트 압축강도</a>
-        <a class="nav-link" href="#requestTest" data-target="requestTest"><span>03</span> 의뢰시험현황</a>
-        <a class="nav-link" href="#nonconformity" data-target="nonconformity"><span>04</span> 품질부적합사항</a>
-        <a class="nav-link" href="#dashboard" data-target="dashboard"><span>05</span> KPI 대시보드</a>
+        <a class="nav-link" href="#materialArch" data-target="materialArch"><span>02</span> 자재승인(건축)</a>
+        <a class="nav-link" href="#materialCivil" data-target="materialCivil"><span>03</span> 자재승인(토목)</a>
+        <a class="nav-link" href="#materialLandscape" data-target="materialLandscape"><span>04</span> 자재승인(조경)</a>
+        <a class="nav-link" href="#compressive" data-target="compressive"><span>05</span> 콘크리트 압축강도</a>
+        <a class="nav-link" href="#requestTest" data-target="requestTest"><span>06</span> 의뢰시험현황</a>
+        <a class="nav-link" href="#nonconformity" data-target="nonconformity"><span>07</span> 품질부적합사항</a>
+        <a class="nav-link" href="#dashboard" data-target="dashboard"><span>08</span> KPI 대시보드</a>
       </div>
     </nav>
 
@@ -55,7 +58,7 @@
               <p class="eyebrow">FIELD STATUS MENU</p>
               <h3>품질관리 현황 조회</h3>
             </div>
-            <span>01~05 현황판 바로가기</span>
+            <span>01~08 현황판 바로가기</span>
           </div>
           <div class="menu-card-grid" id="menuCards"></div>
         </section>
@@ -109,6 +112,9 @@
       </section>
 
       <section class="view" id="readyMix"><div class="status-page" data-page="readyMix"></div></section>
+      <section class="view" id="materialArch"><div class="status-page" data-page="materialArch"></div></section>
+      <section class="view" id="materialCivil"><div class="status-page" data-page="materialCivil"></div></section>
+      <section class="view" id="materialLandscape"><div class="status-page" data-page="materialLandscape"></div></section>
       <section class="view" id="compressive"><div class="status-page" data-page="compressive"></div></section>
       <section class="view" id="requestTest"><div class="status-page" data-page="requestTest"></div></section>
       <section class="view" id="nonconformity"><div class="status-page" data-page="nonconformity"></div></section>
@@ -120,7 +126,7 @@
             <div>
               <p class="eyebrow">QUALITY KPI DASHBOARD</p>
               <h2>KPI 대시보드</h2>
-              <p class="page-desc">콘크리트 타설현황, 압축강도, 의뢰시험, 품질부적합 데이터를 기준으로 자동 집계됩니다.</p>
+              <p class="page-desc">1~7번 현황 데이터를 기준으로 자동 집계됩니다.</p>
             </div>
           </div>
           <button class="text-action" data-action="refreshDashboard">데이터 재집계</button>
@@ -131,6 +137,7 @@
           <article class="chart-card"><h3>의뢰시험 적합률</h3><canvas id="passRateChart" height="230"></canvas></article>
           <article class="chart-card"><h3>공종별 부적합 현황</h3><div class="rank-list" id="tradeNcrRank"></div></article>
           <article class="chart-card"><h3>제조사별 콘크리트 타설현황</h3><div class="rank-list" id="makerReadyMixRank"></div></article>
+          <article class="chart-card wide"><h3>승인상태별 자재 현황</h3><canvas id="approvalChart" height="230"></canvas></article>
         </div>
       </section>
     </main>
@@ -159,8 +166,8 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./data.js?v=20260604-cleanup1"></script>
-  <script src="./config.js?v=20260604-cleanup1"></script>
-  <script src="./script.js?v=20260604-cleanup1"></script>
+  <script src="./data.js?v=20260604-cleanup3"></script>
+  <script src="./config.js?v=20260604-cleanup3"></script>
+  <script src="./script.js?v=20260604-cleanup3"></script>
 </body>
 </html>
