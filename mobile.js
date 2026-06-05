@@ -1,5 +1,5 @@
 const mobilePortalConfig = {
-  version: "20260604-cleanup1",
+  version: "20260604-cleanup3",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
   storageKey: "sillim2MobileOcrTest4PhotoRegisterData",
   compressionStorageKey: "qualityPortal_compressionStrengthData",
@@ -21,13 +21,17 @@ let pendingExcelPourRows = [];
 
 const mobileDashboardCards = [
   { no: "01", id: "readyMix", title: "콘크리트 타설현황", icon: "truck" },
-  { no: "02", id: "compressive", title: "콘크리트 압축강도", icon: "cube" },
-  { no: "03", id: "photoRegister", title: "압축강도 보드판 사진등록", icon: "camera" },
-  { no: "04", id: "dashboard", title: "KPI 대시보드", icon: "dashboard" }
+  { no: "02", id: "materialArch", title: "자재승인(건축)", icon: "clipboard" },
+  { no: "03", id: "materialCivil", title: "자재승인(토목)", icon: "rebar" },
+  { no: "04", id: "materialLandscape", title: "자재승인(조경)", icon: "leaf" },
+  { no: "05", id: "compressive", title: "콘크리트 압축강도", icon: "cube" },
+  { no: "06", id: "requestTest", title: "의뢰시험현황", icon: "flask" },
+  { no: "07", id: "nonconformity", title: "품질부적합사항", icon: "shield" },
+  { no: "08", id: "dashboard", title: "KPI 대시보드", icon: "dashboard" }
 ];
 
 const mobileInputTypes = {
-  compressionTestPhoto: { no: "02", label: "압축강도 보드판 사진", syncTarget: "compressionStrengthData" }
+  compressionTestPhoto: { no: "01", label: "압축강도 보드판 사진", syncTarget: "compressionStrengthData" }
 };
 
 let selectedEntryType = "compressionTestPhoto";
@@ -94,7 +98,8 @@ function iconSvg(name) {
     building: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M16 54V14h28v40"/><path d="M44 28h8v26"/><path d="M23 22h5M32 22h5M23 31h5M32 31h5M23 40h5M32 40h5"/><path d="M12 54h44"/></svg>`,
     camera: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M14 23h10l4-6h8l4 6h10v27H14z"/><path d="M32 44a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/><path d="M46 29h.1"/></svg>`
     ,
-    dashboard: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M12 50V30"/><path d="M25 50V18"/><path d="M38 50V26"/><path d="M51 50V12"/><path d="M8 50h48"/></svg>`
+    dashboard: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M12 50V30"/><path d="M25 50V18"/><path d="M38 50V26"/><path d="M51 50V12"/><path d="M8 50h48"/></svg>`,
+    shield: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 8 52 18v13c0 13-8 22-20 25-12-3-20-12-20-25V18z"/><path d="M32 21v15"/><path d="M32 44h.1"/></svg>`
   };
   return icons[name] || icons.clipboard;
 }
