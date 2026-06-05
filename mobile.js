@@ -1,5 +1,5 @@
 const mobilePortalConfig = {
-  version: "20260604-concrete-pour2",
+  version: "20260604-concrete-pour3",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
   storageKey: "sillim2MobileOcrTest4PhotoRegisterData",
   compressionStorageKey: "qualityPortal_compressionStrengthData",
@@ -50,6 +50,9 @@ const mobileInputTypes = {
 let selectedEntryType = "specimenPhoto";
 let latestOcrFile = null;
 const googleScriptUrl = (window.GOOGLE_SCRIPT_URL || "").trim();
+let ocrLanguageLoadLogged = false;
+
+const concretePourWhitelist = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허고노도로모보소오조초코토포호구누두루무부수우주추쿠투푸후기니디리미비시이지치키티피히한일쌍용삼표유진아주콘크리트타설현황규격위치물량제조사회차비고가설본타설기초벽체슬라브획지서측동측남측북측가설헬스사무실쌍용레미콘()-/ .";
 
 function isGoogleSyncEnabled() {
   return Boolean(googleScriptUrl && !googleScriptUrl.includes("여기에_Apps_Script_Web_App_URL_입력"));
@@ -635,11 +638,17 @@ function normalizeConcreteCellValue(key, value) {
   if (key === "manufacturer") {
     if (/한\s*일|하\s*일|한입/.test(text)) return "한일";
     if (/쌍\s*용|상\s*용|쌍용/.test(text)) return "쌍용";
+    if (/삼\s*표|삼표/.test(text)) return "삼표";
+    if (/유\s*진|유진/.test(text)) return "유진";
+    if (/아\s*주|아주/.test(text)) return "아주";
     return text.replace(/[^가-힣A-Za-z0-9㈜().-]/g, "");
   }
   if (key === "note") {
     if (/가\s*설|가설/.test(text)) return "가설";
     if (/본\s*타\s*설|본타설/.test(text)) return "본타설";
+    if (/기\s*초|기초/.test(text)) return "기초";
+    if (/벽\s*체|벽체/.test(text)) return "벽체";
+    if (/슬\s*라\s*브|슬라브/.test(text)) return "슬라브";
     return text.replace(/[^가-힣A-Za-z0-9/().-]/g, "");
   }
   return text;
@@ -652,9 +661,11 @@ function isEmptyConcretePourRow(row) {
 async function recognizeConcretePourTableByCells(file, tesseractEngine) {
   const image = await loadImageFromFile(file);
   const sourceCanvas = drawImageToCanvas(image);
-  const tableCanvas = cropRatioToCanvas(sourceCanvas, concretePourOcrLayout.table, 1);
+  const tableCanvas = cropConcreteCellCanvas(sourceCanvas, concretePourOcrLayout.table, 2, false);
+  const originalTableCanvas = cropOriginalRatioToCanvas(sourceCanvas, concretePourOcrLayout.table, 2);
   const tablePreviewUrl = tableCanvas.toDataURL("image/png");
   const rows = [];
+  const cellPreviews = [];
   const debugLines = [
     "[콘크리트 타설현황표 셀 단위 OCR]",
     `tableCropPreview=${tablePreviewUrl.slice(0, 180)}...`
@@ -669,15 +680,23 @@ async function recognizeConcretePourTableByCells(file, tesseractEngine) {
 
     for (const [key, label, x1, x2] of concretePourOcrLayout.columns) {
       setOcrStatus(`콘크리트 타설현황표 셀 OCR ${rowIndex + 1}행 ${label}`, "running");
-      const cellCanvas = cropRatioToCanvas(tableCanvas, {
+      const cellRegion = {
         x: x1,
         y,
         w: x2 - x1,
         h: concretePourOcrLayout.rowHeight
-      }, key === "location" ? 2.0 : 2.8);
-      const raw = await recognizeCellImage(tesseractEngine, cellCanvas);
-      rawCells[key] = raw;
-      row[key] = normalizeConcreteCellValue(key, raw);
+      };
+      const processedCellCanvas = cropConcreteCellCanvas(tableCanvas, cellRegion, key === "location" ? 2.0 : 2.8, false);
+      const originalCellCanvas = cropOriginalRatioToCanvas(originalTableCanvas, cellRegion, key === "location" ? 2.0 : 2.8);
+      const cellResult = await recognizeConcreteCellWithFallback(tesseractEngine, processedCellCanvas, originalCellCanvas, key);
+      rawCells[key] = cellResult.raw;
+      row[key] = cellResult.normalized;
+      if (rowIndex < 8) {
+        cellPreviews.push({
+          label: `${rowIndex + 1}행 ${label}${cellResult.usedFallback ? " fallback" : ""}`,
+          src: originalCellCanvas.toDataURL("image/png")
+        });
+      }
     }
 
     const normalizedRow = normalizeConcretePourRecord(row);
@@ -696,7 +715,8 @@ async function recognizeConcretePourTableByCells(file, tesseractEngine) {
   return {
     rows,
     debugText: debugLines.join("\n"),
-    previewUrl: tablePreviewUrl
+    previewUrl: tablePreviewUrl,
+    cellPreviews
   };
 }
 
@@ -822,6 +842,28 @@ function setConcretePourCropPreview(dataUrl = "") {
   preview.src = dataUrl;
 }
 
+function setConcretePourCellPreviews(previews = []) {
+  const rawBox = document.querySelector(".ocr-raw-box");
+  if (!rawBox) return;
+  let wrapper = document.getElementById("concretePourCellPreviews");
+  if (!previews.length) {
+    if (wrapper) wrapper.remove();
+    return;
+  }
+  if (!wrapper) {
+    wrapper = document.createElement("div");
+    wrapper.id = "concretePourCellPreviews";
+    wrapper.style.cssText = "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 12px 12px;";
+    rawBox.appendChild(wrapper);
+  }
+  wrapper.innerHTML = previews.map(preview => `
+    <figure style="margin:0;border:1px solid #D9DDE3;background:#fff;padding:6px;">
+      <figcaption style="font-size:11px;font-weight:800;color:#0B1F3A;margin-bottom:4px;">${escapeHtml(preview.label)}</figcaption>
+      <img src="${preview.src}" alt="${escapeHtml(preview.label)} crop" style="width:100%;display:block;">
+    </figure>
+  `).join("");
+}
+
 function renderConcretePourPreviewRows(rows = []) {
   const target = document.getElementById("concretePourPreviewBody");
   if (!target) return;
@@ -883,6 +925,7 @@ function clearOcrFields() {
   });
   renderConcretePourPreviewRows([]);
   setConcretePourCropPreview("");
+  setConcretePourCellPreviews([]);
   setOcrConfidenceStatus("확인 대기");
 }
 
@@ -997,7 +1040,54 @@ function cropRatioToCanvas(sourceCanvas, region, scale = 2.2) {
   return canvas;
 }
 
+function cropOriginalRatioToCanvas(sourceCanvas, region, scale = 2) {
+  const sx = Math.max(0, Math.round(region.x * sourceCanvas.width));
+  const sy = Math.max(0, Math.round(region.y * sourceCanvas.height));
+  const sw = Math.min(sourceCanvas.width - sx, Math.round(region.w * sourceCanvas.width));
+  const sh = Math.min(sourceCanvas.height - sy, Math.round(region.h * sourceCanvas.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sw * scale));
+  canvas.height = Math.max(1, Math.round(sh * scale));
+  canvas.getContext("2d", { willReadFrequently: true }).drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+function cropConcreteCellCanvas(sourceCanvas, region, scale = 2.2, useThreshold = false) {
+  const canvas = cropOriginalRatioToCanvas(sourceCanvas, region, scale);
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  const grayValues = new Uint8ClampedArray(canvas.width * canvas.height);
+  const contrast = 1.14;
+
+  for (let index = 0, pixel = 0; index < data.length; index += 4, pixel += 1) {
+    const gray = 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2];
+    grayValues[pixel] = Math.max(0, Math.min(255, (gray - 128) * contrast + 128));
+  }
+
+  for (let y = 0; y < canvas.height; y += 1) {
+    for (let x = 0; x < canvas.width; x += 1) {
+      const pixel = y * canvas.width + x;
+      const center = grayValues[pixel];
+      const left = grayValues[y * canvas.width + Math.max(0, x - 1)];
+      const right = grayValues[y * canvas.width + Math.min(canvas.width - 1, x + 1)];
+      const top = grayValues[Math.max(0, y - 1) * canvas.width + x];
+      const bottom = grayValues[Math.min(canvas.height - 1, y + 1) * canvas.width + x];
+      let value = Math.max(0, Math.min(255, center * 1.45 - (left + right + top + bottom) * 0.1125));
+      if (useThreshold) value = value > 178 ? 255 : 0;
+      const dataIndex = pixel * 4;
+      data[dataIndex] = value;
+      data[dataIndex + 1] = value;
+      data[dataIndex + 2] = value;
+    }
+  }
+
+  context.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
 async function recognizeImage(tesseractEngine, imageSource, logger) {
+  logOcrLanguageLoad("kor+eng");
   const result = await tesseractEngine.recognize(imageSource, "kor+eng", {
     logger,
     tessedit_pageseg_mode: "6"
@@ -1005,12 +1095,42 @@ async function recognizeImage(tesseractEngine, imageSource, logger) {
   return normalizeOcrText(result?.data?.text || "");
 }
 
-async function recognizeCellImage(tesseractEngine, canvas) {
+function logOcrLanguageLoad(language) {
+  if (ocrLanguageLoadLogged) return;
+  ocrLanguageLoadLogged = true;
+  console.info(`[OCR] Tesseract.js worker language requested: ${language}. kor traineddata should be loaded by Tesseract CDN worker.`);
+}
+
+async function recognizeCellImage(tesseractEngine, canvas, options = {}) {
+  logOcrLanguageLoad("kor+eng");
   const result = await tesseractEngine.recognize(canvas.toDataURL("image/png"), "kor+eng", {
     tessedit_pageseg_mode: "7",
-    tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허고노도로모보소오조초코토포호구누두루무부수우주추쿠투푸후기니디리미비시이지치키티피히-./()㎡mM³ "
+    preserve_interword_spaces: "1",
+    tessedit_char_whitelist: options.whitelist || concretePourWhitelist
   });
   return normalizeOcrText(result?.data?.text || "");
+}
+
+function isProbablyBrokenKoreanCell(key, raw, normalized) {
+  if (!raw && !normalized) return true;
+  if (/[�□]/.test(raw)) return true;
+  if (["location", "manufacturer", "note", "batch"].includes(key) && raw && !/[가-힣]/.test(raw) && /[A-Za-z0-9]{4,}/.test(raw)) return true;
+  return false;
+}
+
+async function recognizeConcreteCellWithFallback(tesseractEngine, processedCanvas, originalCanvas, key) {
+  const processedRaw = await recognizeCellImage(tesseractEngine, processedCanvas);
+  let normalized = normalizeConcreteCellValue(key, processedRaw);
+  if (!isProbablyBrokenKoreanCell(key, processedRaw, normalized)) {
+    return { raw: processedRaw, normalized, usedFallback: false };
+  }
+
+  const originalRaw = await recognizeCellImage(tesseractEngine, originalCanvas);
+  const originalNormalized = normalizeConcreteCellValue(key, originalRaw);
+  if (originalNormalized && (!normalized || originalNormalized.length >= normalized.length)) {
+    return { raw: `${processedRaw}\n[원본 crop fallback]\n${originalRaw}`, normalized: originalNormalized, usedFallback: true };
+  }
+  return { raw: `${processedRaw}\n[원본 crop fallback]\n${originalRaw}`, normalized, usedFallback: true };
 }
 
 async function recognizeBoardRegions(file, tesseractEngine) {
@@ -1061,6 +1181,7 @@ async function handlePhotoOcr(file) {
       let rows = cellResult.rows;
       let debugText = cellResult.debugText;
       setConcretePourCropPreview(cellResult.previewUrl);
+      setConcretePourCellPreviews(cellResult.cellPreviews);
       if (!rows.length) {
         const preprocessedImage = await preprocessImageForOcr(file).catch(() => file);
         const fallbackText = await recognizeImage(tesseractEngine, preprocessedImage, progress => {
