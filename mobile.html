@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./mobile.css?v=20260604-cleanup1">
+  <link rel="stylesheet" href="./mobile.css?v=20260604-cleanup3">
 </head>
 <body>
   <main class="mobile-shell">
@@ -35,7 +35,12 @@
     <nav class="mobile-tabs" aria-label="모바일 포털 메뉴">
       <button class="tab-button active" type="button" data-tab="dashboard">HOME</button>
       <button class="tab-button" type="button" data-tab="pour">타설현황</button>
+      <button class="tab-button" type="button" data-tab="materialArch">자재승인(건축)</button>
+      <button class="tab-button" type="button" data-tab="materialCivil">자재승인(토목)</button>
+      <button class="tab-button" type="button" data-tab="materialLandscape">자재승인(조경)</button>
       <button class="tab-button" type="button" data-tab="compression">압축강도</button>
+      <button class="tab-button" type="button" data-tab="requestTest">의뢰시험</button>
+      <button class="tab-button" type="button" data-tab="nonconformity">부적합</button>
       <button class="tab-button" type="button" data-tab="photo">사진등록</button>
       <button class="tab-button" type="button" data-tab="kpi">KPI</button>
     </nav>
@@ -95,6 +100,42 @@
       <div class="data-list" id="concretePourList"></div>
     </section>
 
+    <section class="tab-view" id="tab-materialArch">
+      <div class="section-head">
+        <p>ARCHITECTURE MATERIAL APPROVAL</p>
+        <h2>자재승인(건축)</h2>
+      </div>
+      <div class="metric-grid">
+        <article class="metric-card"><h3>승인건수</h3><div class="metric-value"><strong>0</strong>건</div><div class="metric-foot">등록된 데이터 없음</div></article>
+        <article class="metric-card"><h3>승인대기건수</h3><div class="metric-value"><strong>0</strong>건</div><div class="metric-foot">등록된 데이터 없음</div></article>
+      </div>
+      <article class="data-empty"><strong>등록된 건축 자재승인 데이터가 없습니다.</strong><p>착공 후 자재명, 규격, 제조사, 승인상태가 표시됩니다.</p></article>
+    </section>
+
+    <section class="tab-view" id="tab-materialCivil">
+      <div class="section-head">
+        <p>CIVIL MATERIAL APPROVAL</p>
+        <h2>자재승인(토목)</h2>
+      </div>
+      <div class="metric-grid">
+        <article class="metric-card"><h3>승인건수</h3><div class="metric-value"><strong>0</strong>건</div><div class="metric-foot">등록된 데이터 없음</div></article>
+        <article class="metric-card"><h3>승인대기건수</h3><div class="metric-value"><strong>0</strong>건</div><div class="metric-foot">등록된 데이터 없음</div></article>
+      </div>
+      <article class="data-empty"><strong>등록된 토목 자재승인 데이터가 없습니다.</strong><p>착공 후 자재명, 규격, 제조사, 승인상태가 표시됩니다.</p></article>
+    </section>
+
+    <section class="tab-view" id="tab-materialLandscape">
+      <div class="section-head">
+        <p>LANDSCAPE MATERIAL APPROVAL</p>
+        <h2>자재승인(조경)</h2>
+      </div>
+      <div class="metric-grid">
+        <article class="metric-card"><h3>승인건수</h3><div class="metric-value"><strong>0</strong>건</div><div class="metric-foot">등록된 데이터 없음</div></article>
+        <article class="metric-card"><h3>승인대기건수</h3><div class="metric-value"><strong>0</strong>건</div><div class="metric-foot">등록된 데이터 없음</div></article>
+      </div>
+      <article class="data-empty"><strong>등록된 조경 자재승인 데이터가 없습니다.</strong><p>착공 후 자재명, 규격, 제조사, 승인상태가 표시됩니다.</p></article>
+    </section>
+
     <section class="tab-view" id="tab-compression">
       <div class="section-head">
         <p>COMPRESSION STRENGTH</p>
@@ -110,6 +151,22 @@
       <div class="data-list" id="compressionList"></div>
     </section>
 
+    <section class="tab-view" id="tab-requestTest">
+      <div class="section-head">
+        <p>REQUESTED TEST STATUS</p>
+        <h2>의뢰시험현황</h2>
+      </div>
+      <article class="data-empty"><strong>등록된 의뢰시험 데이터가 없습니다.</strong><p>착공 후 시험명, 의뢰기관, 진행상태와 판정이 표시됩니다.</p></article>
+    </section>
+
+    <section class="tab-view" id="tab-nonconformity">
+      <div class="section-head">
+        <p>NONCONFORMANCE STATUS</p>
+        <h2>품질부적합사항</h2>
+      </div>
+      <article class="data-empty"><strong>등록된 품질부적합 데이터가 없습니다.</strong><p>착공 후 발생 위치, 공종, 조치상태가 표시됩니다.</p></article>
+    </section>
+
     <section class="tab-view" id="tab-photo">
       <div class="section-head">
         <p>PHOTO REGISTER</p>
@@ -118,14 +175,14 @@
 
       <div class="action-panel" aria-label="등록 유형">
         <button class="action-button active" type="button" data-entry-type="compressionTestPhoto">
-          <span>02</span>
+          <span>01</span>
           <strong>압축강도 보드판 사진</strong>
         </button>
       </div>
 
       <section class="form-card">
         <div class="form-head">
-          <span id="selectedTypeNo">02</span>
+          <span id="selectedTypeNo">01</span>
           <div>
             <p>OCR TEST / VERIFY</p>
             <h2 id="selectedTypeTitle">압축강도 보드판 사진</h2>
@@ -209,18 +266,10 @@
     <em>신림2재정비촉진구역 주택재개발정비사업 품질관리 종합현황</em>
   </footer>
 
-  <nav class="bottom-nav" aria-label="모바일 하단 내비게이션">
-    <button class="bottom-nav-button active" type="button" data-tab="dashboard"><span>⌂</span>홈</button>
-    <button class="bottom-nav-button" type="button" data-tab="pour"><span>▥</span>타설</button>
-    <button class="bottom-nav-button" type="button" data-tab="compression"><span>▣</span>강도</button>
-    <button class="bottom-nav-button" type="button" data-tab="photo"><span>＋</span>등록</button>
-    <button class="bottom-nav-button" type="button" data-tab="kpi"><span>▦</span>KPI</button>
-  </nav>
-
   <div class="mobile-toast" id="mobileToast" role="status" aria-live="polite"></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/6.0.1/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="./config.js?v=20260604-cleanup1"></script>
-  <script src="./mobile.js?v=20260604-cleanup1"></script>
+  <script src="./config.js?v=20260604-cleanup3"></script>
+  <script src="./mobile.js?v=20260604-cleanup3"></script>
 </body>
 </html>
