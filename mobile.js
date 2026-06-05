@@ -1,5 +1,5 @@
 const mobilePortalConfig = {
-  version: "20260604-data-sync-local1",
+  version: "20260604-google-sync1",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
   storageKey: "sillim2MobileOcrTest4PhotoRegisterData",
   compressionStorageKey: "qualityPortal_compressionStrengthData",
@@ -46,6 +46,19 @@ const mobileInputTypes = {
 
 let selectedEntryType = "specimenPhoto";
 let latestOcrFile = null;
+const googleScriptUrl = (window.GOOGLE_SCRIPT_URL || "").trim();
+
+function isGoogleSyncEnabled() {
+  return Boolean(googleScriptUrl && !googleScriptUrl.includes("여기에_Apps_Script_Web_App_URL_입력"));
+}
+
+function normalizeGoogleRows(payload) {
+  const rows = Array.isArray(payload)
+    ? payload
+    : payload?.compressionStrength || payload?.compressionStrengthData || payload?.data || payload?.rows || [];
+
+  return Array.isArray(rows) ? rows.map(normalizeCompressionRecord) : [];
+}
 
 const boardOcrRegions = {
   location: { label: "타설부위 값 영역", x: 0.18, y: 0.14, w: 0.60, h: 0.08 },
@@ -117,6 +130,72 @@ function readCompressionStrengthData() {
 function writeCompressionStrengthData(entries) {
   compressionStrengthData = entries.map(normalizeCompressionRecord);
   localStorage.setItem(mobilePortalConfig.compressionStorageKey, JSON.stringify(compressionStrengthData));
+}
+
+async function fetchCompressionDataFromGoogleSheets() {
+  if (!isGoogleSyncEnabled()) return null;
+
+  const url = new URL(googleScriptUrl);
+  url.searchParams.set("type", "compressionStrength");
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    cache: "no-store"
+  });
+
+  if (!response.ok) throw new Error(`Google Sheets GET failed: ${response.status}`);
+  return normalizeGoogleRows(await response.json());
+}
+
+async function loadCompressionData() {
+  compressionStrengthData = readCompressionStrengthData();
+  refreshCompressionViews();
+
+  try {
+    const googleRows = await fetchCompressionDataFromGoogleSheets();
+    if (!googleRows) return false;
+    writeCompressionStrengthData(googleRows);
+    refreshCompressionViews();
+    return true;
+  } catch (error) {
+    console.warn("Google Sheets 데이터를 불러오지 못해 localStorage 데이터를 사용합니다.", error);
+    compressionStrengthData = readCompressionStrengthData();
+    refreshCompressionViews();
+    return false;
+  }
+}
+
+function makeGoogleCompressionPayload(record) {
+  const item = normalizeCompressionRecord(record);
+  return {
+    type: "compressionStrength",
+    id: item.id,
+    testType: item.testType,
+    location: item.location,
+    spec: item.spec,
+    age: item.age,
+    pourDate: item.pourDate,
+    testDate: item.testDate,
+    averageStrength: item.averageStrength,
+    manufacturer: item.manufacturer,
+    resultStatus: item.resultStatus,
+    createdAt: item.createdAt
+  };
+}
+
+async function postCompressionDataToGoogleSheets(record) {
+  if (!isGoogleSyncEnabled()) return { skipped: true };
+
+  const response = await fetch(googleScriptUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify(makeGoogleCompressionPayload(record))
+  });
+
+  if (!response.ok) throw new Error(`Google Sheets POST failed: ${response.status}`);
+  return { skipped: false };
 }
 
 function countCompressionResults(records = compressionStrengthData) {
@@ -907,6 +986,7 @@ function setupMobilePortal() {
   renderStatusList();
   setDefaultDate();
   setEntryType(selectedEntryType);
+  loadCompressionData();
 
   document.querySelectorAll("[data-tab]").forEach(button => {
     button.addEventListener("click", () => setTab(button.dataset.tab));
@@ -933,7 +1013,7 @@ function setupMobilePortal() {
   const mobileInputForm = document.getElementById("mobileInputForm");
   disableNativeValidation(mobileInputForm);
 
-  mobileInputForm.addEventListener("submit", event => {
+  mobileInputForm.addEventListener("submit", async event => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const validation = validateMobileInput(formData);
@@ -948,11 +1028,21 @@ function setupMobilePortal() {
     writePhotoRegisterData(entries);
 
     const hasOcrData = hasOcrCompressionData(validation.ocrData);
+    let googleMessage = "";
     if (hasOcrData) {
+      const compressionRecord = makeCompressionRecord(validation.ocrData, formData);
       const compressionEntries = readCompressionStrengthData();
-      compressionEntries.unshift(makeCompressionRecord(validation.ocrData, formData));
+      compressionEntries.unshift(compressionRecord);
       writeCompressionStrengthData(compressionEntries);
       refreshCompressionViews();
+
+      try {
+        const googleResult = await postCompressionDataToGoogleSheets(compressionRecord);
+        googleMessage = googleResult.skipped ? "압축강도 현황에 저장되었습니다" : "Google Sheets 저장 완료";
+      } catch (error) {
+        console.warn("Google Sheets 저장 실패 / 로컬 저장만 완료", error);
+        googleMessage = "Google Sheets 저장 실패 / 로컬 저장만 완료";
+      }
     }
 
     renderStatusList();
@@ -963,7 +1053,7 @@ function setupMobilePortal() {
     setOcrStatus("압축강도 보드판 사진 업로드 시 OCR 분석을 실행합니다.");
     setDefaultDate();
     setTab(hasOcrData ? "compression" : "status");
-    showToast(hasOcrData ? "압축강도 현황에 저장되었습니다" : "사진 등록 데이터가 임시 저장되었습니다.");
+    showToast(hasOcrData ? googleMessage : "사진 등록 데이터가 임시 저장되었습니다.");
   });
 
   window.addEventListener("storage", event => {
