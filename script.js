@@ -1,5 +1,8 @@
 const pageOrder = [
   "readyMix",
+  "materialArch",
+  "materialCivil",
+  "materialLandscape",
   "compressive",
   "requestTest",
   "nonconformity"
@@ -7,10 +10,13 @@ const pageOrder = [
 
 const menuItems = [
   ["readyMix", "01", "콘크리트 타설현황", "타설일자, 규격, 타설위치, 물량과 제조사 조회"],
-  ["compressive", "02", "콘크리트 압축강도", "재령별 강도 시험결과와 판정 확인"],
-  ["requestTest", "03", "의뢰시험현황", "외부 의뢰시험 진행상태와 판정 추적"],
-  ["nonconformity", "04", "품질부적합사항", "부적합 발생 및 조치상태 추적"],
-  ["dashboard", "05", "KPI 대시보드", "주요 현황 데이터 자동 종합 집계"]
+  ["materialArch", "02", "자재승인(건축)", "건축 자재 규격, 승인상태와 판정 확인"],
+  ["materialCivil", "03", "자재승인(토목)", "토목 자재 승인 현황 조회"],
+  ["materialLandscape", "04", "자재승인(조경)", "조경 자재 승인 현황 조회"],
+  ["compressive", "05", "콘크리트 압축강도", "재령별 강도 시험결과와 판정 확인"],
+  ["requestTest", "06", "의뢰시험현황", "외부 의뢰시험 진행상태와 판정 추적"],
+  ["nonconformity", "07", "품질부적합사항", "부적합 발생 및 조치상태 추적"],
+  ["dashboard", "08", "KPI 대시보드", "1~7번 현황 데이터 자동 종합 집계"]
 ];
 
 const badgeMap = {
@@ -259,6 +265,9 @@ function iconSvg(id) {
   const icons = {
     home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h5v-6h2v6h5V10"/>',
     readyMix: '<path d="M4 14h10l2 3h2"/><path d="M4 9h7l3 5"/><path d="M5 17a2 2 0 1 0 0.1 0M17 17a2 2 0 1 0 0.1 0"/><path d="M13 8l4-2 2 4-4 2z"/>',
+    materialArch: '<path d="M7 4h10v18H7z"/><path d="M10 4a2 2 0 0 1 4 0"/><path d="M10 10h4M10 14h6"/><path d="M9 18l2 2 5-6"/>',
+    materialCivil: '<path d="M5 17l10-10"/><path d="M8 20L18 10"/><path d="M4 13l7 7"/><path d="M10 6l7 7"/><path d="M14 4l6 6"/>',
+    materialLandscape: '<path d="M12 21V10"/><path d="M12 12c-5 0-7-3-7-7 5 0 7 3 7 7z"/><path d="M12 14c5 0 7-3 7-7-5 0-7 3-7 7z"/>',
     compressive: '<path d="M12 3l8 4-8 4-8-4 8-4z"/><path d="M4 7v9l8 4 8-4V7"/><path d="M12 11v9"/>',
     requestTest: '<path d="M10 3h4"/><path d="M11 3v6l-5 9a2 2 0 0 0 2 3h8a2 2 0 0 0 2-3l-5-9V3"/><path d="M8 16h8"/>',
     nonconformity: '<path d="M12 3l7 4v6c0 4-3 7-7 8-4-1-7-4-7-8V7l7-4z"/><path d="M12 8v6"/><path d="M12 17h.01"/>',
@@ -299,12 +308,30 @@ function isPass(value) {
   return ["합격", "적합", "완료", "승인", "승인완료"].includes(value);
 }
 
+function isApproved(value) {
+  return ["완료", "승인", "승인완료"].includes(value);
+}
+
+function isPending(value) {
+  return ["대기", "진행중", "검토중", "보완", "보완요청", "지연"].includes(value);
+}
+
 function isDecisionValue(value) {
   return Boolean(value) && !["대기", "진행중", "검토중", "보완", "보완요청"].includes(value);
 }
 
 function rate(numerator, denominator) {
   return denominator ? Math.round((numerator / denominator) * 1000) / 10 : 0;
+}
+
+function getMaterialKpi(pageKey) {
+  const rows = qualityPortalData[pageKey].rows;
+  const decisionRows = rows.filter(row => isDecisionValue(row["판정"]));
+  return {
+    approvalCount: rows.filter(row => isApproved(row["승인상태"])).length,
+    pendingCount: rows.filter(row => isPending(row["승인상태"]) || !row["승인상태"]).length,
+    fitRate: rate(decisionRows.filter(row => isPass(row["판정"])).length, decisionRows.length)
+  };
 }
 
 function getKpiSummary() {
@@ -314,10 +341,14 @@ function getKpiSummary() {
   const ncrRows = qualityPortalData.nonconformity.rows;
   const requestedDecisionRows = requestedRows.filter(row => isDecisionValue(row["판정"]));
   const completedNcr = ncrRows.filter(row => row["상태"] === "완료").length;
+  const arch = getMaterialKpi("materialArch");
+  const civil = getMaterialKpi("materialCivil");
+  const landscape = getMaterialKpi("materialLandscape");
 
   return {
     readyMixCount: readyRows.length,
     totalReadyMixVolume: Math.round(sumReadyMixVolume()),
+    materialApprovalCount: arch.approvalCount + civil.approvalCount + landscape.approvalCount,
     requestedFitRate: rate(requestedDecisionRows.filter(row => isPass(row["판정"])).length, requestedDecisionRows.length),
     ncrCount: ncrRows.length,
     completedNcr,
@@ -333,6 +364,9 @@ function getPrimaryMetric(pageKey) {
   const rows = qualityPortalData[pageKey]?.rows || [];
   if (pageKey === "dashboard") return ["KPI", "0"];
   if (pageKey === "readyMix") return ["총 타설건수", `${rows.length}건`];
+  if (["materialArch", "materialCivil", "materialLandscape"].includes(pageKey)) {
+    return ["승인건수", `${getMaterialKpi(pageKey).approvalCount}건`];
+  }
   if (pageKey === "compressive") return ["시험건수", `${rows.length}건`];
   if (pageKey === "requestTest") return ["의뢰건수", `${rows.length}건`];
   return ["발생건수", `${rows.length}건`];
@@ -342,6 +376,7 @@ function kpiCardItems() {
   const kpi = getKpiSummary();
   return [
     ["콘크리트 타설건수", `${kpi.readyMixCount}건`, `총 타설량 ${kpi.totalReadyMixVolume}m³`, "#E60012"],
+    ["자재승인 건수", `${kpi.materialApprovalCount}건`, "건축·토목·조경 승인 누계", "#E60012"],
     ["압축강도 시험건수", `${kpi.strengthTestCount}건`, "압축강도 OCR 저장 기준", "#102A54"],
     ["의뢰시험 적합률", `${kpi.requestedFitRate}%`, "의뢰시험 판정 기준", "#102A54"],
     ["품질부적합 발생건수", `${kpi.ncrCount}건`, "품질부적합사항 누계", "#E60012"],
@@ -366,6 +401,7 @@ function renderHomeKpis() {
   if (heroMetrics) {
     heroMetrics.innerHTML = `
       <div><span>타설현황</span><strong>${kpi.readyMixCount}</strong></div>
+      <div><span>자재승인</span><strong>${kpi.materialApprovalCount}</strong></div>
       <div><span>압축강도</span><strong>${kpi.strengthTestCount}</strong></div>
       <div><span>의뢰시험 적합률</span><strong>${kpi.requestedFitRate}%</strong></div>
       <div><span>부적합</span><strong>${kpi.ncrCount}</strong></div>
@@ -416,6 +452,15 @@ function getSummaryItems(pageKey, rows) {
       ["총 타설량", `${Math.round(sumReadyMixVolume())}m³`],
       ["금월 타설건수", `${monthRows.length}건`],
       ["금월 타설량", `${Math.round(monthRows.reduce((sum, row) => sum + Number(String(row["물량"] || "").replace(/[^0-9.]/g, "")), 0))}m³`]
+    ];
+  }
+  if (["materialArch", "materialCivil", "materialLandscape"].includes(pageKey)) {
+    const materialKpi = getMaterialKpi(pageKey);
+    return [
+      ["승인건수", `${materialKpi.approvalCount}건`],
+      ["승인대기건수", `${materialKpi.pendingCount}건`],
+      ["적합률", `${materialKpi.fitRate}%`],
+      ["등록 자재", `${rows.length}건`]
     ];
   }
   if (pageKey === "compressive") {
@@ -661,6 +706,7 @@ function drawDashboardCharts() {
   const kpi = getKpiSummary();
   drawBarChart("monthlyChart", ["1월", "2월", "3월", "4월", "5월", "6월"], [0, 0, 0, 0, 0, 0], "#102A54");
   drawDonutChart("passRateChart", kpi.requestedFitRate);
+  drawBarChart("approvalChart", ["승인", "진행", "지연", "보완"], [0, 0, 0, 0], "#E60012");
 }
 
 function showView(id) {
