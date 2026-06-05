@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./mobile.css?v=20260604-edit-delete1">
+  <link rel="stylesheet" href="./mobile.css?v=20260604-excel-upload1">
 </head>
 <body>
   <main class="mobile-shell">
@@ -54,6 +54,40 @@
         <p>CONCRETE POUR STATUS</p>
         <h2>콘크리트 타설현황</h2>
       </div>
+      <div class="action-panel" aria-label="콘크리트 타설현황 관리">
+        <label class="action-button" style="cursor:pointer;">
+          <span>XLSX</span>
+          <strong>엑셀 업로드</strong>
+          <input id="concretePourExcelInput" type="file" accept=".xlsx" style="display:none;">
+        </label>
+        <button class="action-button" type="button" id="saveConcretePourExcelButton">
+          <span>저장</span>
+          <strong>타설현황 저장</strong>
+        </button>
+        <button class="action-button" type="button" id="clearConcretePourButton">
+          <span>삭제</span>
+          <strong>전부삭제</strong>
+        </button>
+      </div>
+      <div class="ocr-table-wrap" style="margin-bottom:14px;">
+        <table class="ocr-preview-table">
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>타설일자</th>
+              <th>규격</th>
+              <th>타설위치</th>
+              <th>물량</th>
+              <th>제조사</th>
+              <th>회차</th>
+              <th>비고</th>
+            </tr>
+          </thead>
+          <tbody id="concretePourExcelPreviewBody">
+            <tr><td colspan="8">엑셀 업로드 후 저장 전 미리보기가 표시됩니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
       <div class="metric-grid" id="concretePourSummaryCards"></div>
       <div class="data-list" id="concretePourList"></div>
     </section>
@@ -64,6 +98,12 @@
         <h2>콘크리트 압축강도</h2>
       </div>
       <div class="metric-grid" id="compressionSummaryCards"></div>
+      <div class="action-panel" aria-label="압축강도 관리">
+        <button class="action-button" type="button" id="clearCompressionButton">
+          <span>삭제</span>
+          <strong>전부삭제</strong>
+        </button>
+      </div>
       <div class="data-list" id="compressionList"></div>
     </section>
 
@@ -267,7 +307,8 @@
 
   <div class="mobile-toast" id="mobileToast" role="status" aria-live="polite"></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/6.0.1/tesseract.min.js"></script>
-  <script src="./config.js?v=20260604-edit-delete1"></script>
-  <script src="./mobile.js?v=20260604-edit-delete1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="./config.js?v=20260604-excel-upload1"></script>
+  <script src="./mobile.js?v=20260604-excel-upload1"></script>
 </body>
 </html>
