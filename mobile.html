@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./mobile.css?v=20260604-google-sync1">
+  <link rel="stylesheet" href="./mobile.css?v=20260604-concrete-pour1">
 </head>
 <body>
   <main class="mobile-shell">
@@ -34,6 +34,7 @@
 
     <nav class="mobile-tabs" aria-label="모바일 포털 탭">
       <button class="tab-button active" type="button" data-tab="dashboard">대시보드</button>
+      <button class="tab-button" type="button" data-tab="pour">타설현황</button>
       <button class="tab-button" type="button" data-tab="compression">압축강도</button>
       <button class="tab-button" type="button" data-tab="material">자재승인</button>
       <button class="tab-button" type="button" data-tab="photo">사진등록</button>
@@ -46,6 +47,15 @@
         <h2>압축강도·자재승인 중심 현장 포털</h2>
       </div>
       <div class="dashboard-grid" id="mobileDashboardCards"></div>
+    </section>
+
+    <section class="tab-view" id="tab-pour">
+      <div class="section-head">
+        <p>CONCRETE POUR STATUS</p>
+        <h2>콘크리트 타설현황</h2>
+      </div>
+      <div class="metric-grid" id="concretePourSummaryCards"></div>
+      <div class="data-list" id="concretePourList"></div>
     </section>
 
     <section class="tab-view" id="tab-compression">
@@ -100,6 +110,10 @@
         <button class="action-button" type="button" data-entry-type="ksCertificatePhoto">
           <span>07</span>
           <strong>시험성적서/KS인증서 사진</strong>
+        </button>
+        <button class="action-button" type="button" data-entry-type="concretePourTablePhoto">
+          <span>08</span>
+          <strong>콘크리트 타설현황표 사진</strong>
         </button>
       </div>
 
@@ -184,6 +198,30 @@
                 <label>제조사<input type="text" name="ocrCompression_manufacturer"></label>
               </div>
             </div>
+
+            <div class="ocr-section concrete-preview-section">
+              <h4>콘크리트 타설현황표 추출값</h4>
+              <p class="preview-help">OCR 결과를 저장 전 확인/수정하세요. 빈 행은 저장되지 않습니다.</p>
+              <div class="ocr-table-wrap">
+                <table class="ocr-preview-table" id="concretePourPreviewTable">
+                  <thead>
+                    <tr>
+                      <th>No.</th>
+                      <th>타설일자</th>
+                      <th>규격</th>
+                      <th>타설위치</th>
+                      <th>물량</th>
+                      <th>제조사</th>
+                      <th>회차</th>
+                      <th>비고</th>
+                    </tr>
+                  </thead>
+                  <tbody id="concretePourPreviewBody">
+                    <tr><td colspan="8">콘크리트 타설현황표 사진 업로드 시 OCR 결과가 표시됩니다.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </section>
 
           <button class="save-button" type="submit">저장</button>
@@ -209,6 +247,10 @@
       <span>▣</span>
       압축강도
     </button>
+    <button class="bottom-nav-button" type="button" data-tab="pour">
+      <span>▥</span>
+      타설현황
+    </button>
     <button class="bottom-nav-button" type="button" data-tab="material">
       <span>▤</span>
       자재승인
@@ -225,7 +267,7 @@
 
   <div class="mobile-toast" id="mobileToast" role="status" aria-live="polite"></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/6.0.1/tesseract.min.js"></script>
-  <script src="./config.js?v=20260604-google-sync1"></script>
-  <script src="./mobile.js?v=20260604-google-sync1"></script>
+  <script src="./config.js?v=20260604-concrete-pour1"></script>
+  <script src="./mobile.js?v=20260604-concrete-pour1"></script>
 </body>
 </html>
