@@ -584,6 +584,7 @@ function renderStatusPages() {
             ${statusOptions.map(option => `<option value="${option}">${option}</option>`).join("")}
           </select>
         </label>
+        ${["readyMix", "compressive"].includes(pageKey) ? `<button type="button" data-pc-clear-page="${pageKey}" style="min-height:38px;padding:0 12px;border:0;background:#E60012;color:#fff;font-weight:900;border-radius:4px;">전부삭제</button>` : ""}
       </div>
       <div class="table-wrap">
         <table class="data-table">
@@ -813,12 +814,27 @@ function removeStorageRecord(type, id) {
 function restorePcDeletedEntry() {
   if (!lastDeletedPcEntry) return;
   const config = getStorageConfig(lastDeletedPcEntry.type);
-  config.write([lastDeletedPcEntry.item].concat(config.read()));
-  postDataMutationToGoogleSheets(lastDeletedPcEntry.type, "update", lastDeletedPcEntry.item).catch(error => console.warn("Google Sheets Undo 연동 실패", error));
+  const items = lastDeletedPcEntry.items || [lastDeletedPcEntry.item];
+  config.write(items.concat(config.read()));
+  postDataMutationToGoogleSheets(lastDeletedPcEntry.type, "update", items).catch(error => console.warn("Google Sheets Undo 연동 실패", error));
   lastDeletedPcEntry = null;
   clearTimeout(pcUndoTimer);
   refreshPortalViews();
   showToast("삭제를 취소했습니다.");
+}
+
+function clearPcPageData(pageKey) {
+  if (!confirm("정말 전체 데이터를 삭제하시겠습니까?")) return;
+  const type = pageKey === "compressive" ? "compression" : "concretePour";
+  const config = getStorageConfig(type);
+  const rows = config.read().map(config.normalize);
+  if (!rows.length) return showToast("삭제할 데이터가 없습니다.");
+  if (type === "compression") localStorage.removeItem(compressionStorageKey);
+  if (type === "concretePour") localStorage.removeItem(concretePourStorageKey);
+  lastDeletedPcEntry = { type, items: rows };
+  refreshPortalViews();
+  postDataMutationToGoogleSheets(type, "delete", { all: true }).catch(error => console.warn("Google Sheets 전체삭제 연동 실패", error));
+  showPcUndoToast("전체 데이터가 삭제되었습니다.");
 }
 
 function getStorageConfig(type) {
@@ -874,6 +890,8 @@ function setupEvents() {
     const deleteButton = event.target.closest("[data-pc-delete-type]");
     if (deleteButton && confirm("정말 삭제하시겠습니까?")) removeStorageRecord(deleteButton.dataset.pcDeleteType, deleteButton.dataset.pcDeleteId);
     if (event.target.closest("[data-pc-undo-delete]")) restorePcDeletedEntry();
+    const clearButton = event.target.closest("[data-pc-clear-page]");
+    if (clearButton) clearPcPageData(clearButton.dataset.pcClearPage);
   });
   document.addEventListener("input", event => {
     const searchPage = event.target.dataset.searchPage;
