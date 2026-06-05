@@ -46,7 +46,7 @@ button {
   width: min(560px, 100%);
   min-height: 100vh;
   margin: 0 auto;
-  padding: 0 14px 104px;
+  padding: 0 14px 28px;
 }
 
 .mobile-header {
@@ -836,7 +836,7 @@ textarea:focus {
   width: min(560px, 100%);
   display: grid;
   gap: 7px;
-  margin: 0 auto 84px;
+  margin: 0 auto 24px;
   padding: 20px 18px;
   background: linear-gradient(135deg, #E60012 0 28%, #2B2B2B 28% 100%);
   color: #fff;
