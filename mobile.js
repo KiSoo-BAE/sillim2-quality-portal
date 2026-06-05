@@ -1,5 +1,5 @@
 const mobilePortalConfig = {
-  version: "20260604-edit-delete1",
+  version: "20260604-excel-upload1",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
   storageKey: "sillim2MobileOcrTest4PhotoRegisterData",
   compressionStorageKey: "qualityPortal_compressionStrengthData",
@@ -19,6 +19,7 @@ let photoRegisterData = [];
 let editState = null;
 let lastDeletedEntry = null;
 let undoTimer = null;
+let pendingExcelPourRows = [];
 
 const mobileDashboardCards = [
   { no: "01", id: "compressive", title: "콘크리트 압축강도", icon: "cube" },
@@ -179,6 +180,37 @@ function normalizeConcretePourRecord(record) {
     note: String(record.note || record["비고"] || "").trim(),
     createdAt: record.createdAt || new Date().toISOString()
   };
+}
+
+function excelDateToIso(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  if (typeof value === "number" && window.XLSX?.SSF?.parse_date_code) {
+    const parsed = window.XLSX.SSF.parse_date_code(value);
+    if (parsed) return formatDateParts(parsed.y, parsed.m, parsed.d);
+  }
+  return normalizePourDate(String(value || ""));
+}
+
+function normalizeExcelCell(value) {
+  return value == null ? "" : String(value).trim();
+}
+
+function parseConcretePourWorkbook(workbook) {
+  const sheet = workbook.Sheets.Sheet1;
+  if (!sheet) throw new Error("Sheet1 시트를 찾을 수 없습니다.");
+  const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" });
+  return rows.slice(5).map((row, index) => normalizeConcretePourRecord({
+    id: `concrete-pour-excel-${Date.now()}-${index}`,
+    no: normalizeExcelCell(row[0]),
+    pourDate: excelDateToIso(row[1]),
+    spec: normalizeExcelCell(row[2]),
+    location: normalizeExcelCell(row[3]),
+    quantity: normalizeExcelCell(row[4]).replace(/[^0-9.]/g, ""),
+    manufacturer: normalizeConcreteCellValue("manufacturer", normalizeExcelCell(row[5])),
+    batch: normalizeExcelCell(row[6]),
+    note: normalizeConcreteCellValue("note", normalizeExcelCell(row[7])),
+    createdAt: new Date().toISOString()
+  })).filter(row => !isEmptyConcretePourRow(row));
 }
 
 function readConcretePourData() {
@@ -950,6 +982,46 @@ function getConcretePourPreviewRows() {
   }).filter(row => row.pourDate || row.location || row.quantity || row.manufacturer);
 }
 
+function renderExcelPourPreviewRows(rows = []) {
+  const target = document.getElementById("concretePourExcelPreviewBody");
+  if (!target) return;
+  pendingExcelPourRows = rows.map(normalizeConcretePourRecord);
+  if (!pendingExcelPourRows.length) {
+    target.innerHTML = `<tr><td colspan="8">엑셀 업로드 후 저장 전 미리보기가 표시됩니다.</td></tr>`;
+    return;
+  }
+  target.innerHTML = pendingExcelPourRows.map(row => `
+    <tr>
+      <td><input name="excelPour_no" value="${escapeHtml(row.no)}"></td>
+      <td><input name="excelPour_pourDate" value="${escapeHtml(row.pourDate)}"></td>
+      <td><input name="excelPour_spec" value="${escapeHtml(row.spec)}"></td>
+      <td><input name="excelPour_location" value="${escapeHtml(row.location)}"></td>
+      <td><input name="excelPour_quantity" value="${escapeHtml(row.quantity)}"></td>
+      <td><input name="excelPour_manufacturer" value="${escapeHtml(row.manufacturer)}"></td>
+      <td><input name="excelPour_batch" value="${escapeHtml(row.batch)}"></td>
+      <td><input name="excelPour_note" value="${escapeHtml(row.note)}"></td>
+    </tr>
+  `).join("");
+}
+
+function getExcelPourPreviewRows() {
+  const body = document.getElementById("concretePourExcelPreviewBody");
+  if (!body) return [];
+  return [...body.querySelectorAll("tr")].map(row => {
+    const get = name => row.querySelector(`[name="${name}"]`)?.value.trim() || "";
+    return normalizeConcretePourRecord({
+      no: get("excelPour_no"),
+      pourDate: get("excelPour_pourDate"),
+      spec: get("excelPour_spec"),
+      location: get("excelPour_location"),
+      quantity: get("excelPour_quantity"),
+      manufacturer: get("excelPour_manufacturer"),
+      batch: get("excelPour_batch"),
+      note: get("excelPour_note")
+    });
+  }).filter(row => !isEmptyConcretePourRow(row));
+}
+
 function updateOcrConfidenceStatus(result) {
   const values = Object.values(result?.compression || {});
   const filledCount = values.filter(Boolean).length;
@@ -1698,6 +1770,53 @@ function handleListAction(event) {
   }
 }
 
+async function handleConcretePourExcelUpload(file) {
+  if (!file) return;
+  if (!/\.xlsx$/i.test(file.name)) {
+    showToast(".xlsx 파일만 업로드할 수 있습니다.");
+    return;
+  }
+  if (!window.XLSX) {
+    showToast("엑셀 파서 로딩 실패, 잠시 후 다시 시도해주세요.");
+    return;
+  }
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const workbook = window.XLSX.read(buffer, { type: "array", cellDates: false });
+    const rows = parseConcretePourWorkbook(workbook);
+    renderExcelPourPreviewRows(rows);
+    showToast(`${rows.length}건을 엑셀에서 읽었습니다. 확인 후 저장하세요.`);
+  } catch (error) {
+    console.warn("콘크리트 타설현황 엑셀 업로드 실패", error);
+    showToast("엑셀 업로드 실패, 양식과 Sheet1을 확인해주세요.");
+  }
+}
+
+async function saveConcretePourExcelRows() {
+  const rows = getExcelPourPreviewRows().map((row, index) => normalizeConcretePourRecord({
+    ...row,
+    id: row.id || `concrete-pour-excel-${Date.now()}-${index}`,
+    createdAt: new Date().toISOString()
+  }));
+  if (!rows.length) {
+    showToast("저장할 타설현황 데이터가 없습니다.");
+    return;
+  }
+  writeConcretePourData(rows.concat(readConcretePourData()));
+  refreshConcretePourViews();
+  renderExcelPourPreviewRows([]);
+  setTab("pour");
+
+  try {
+    const googleResult = await postConcretePourDataToGoogleSheets(rows);
+    showToast(googleResult.skipped ? "타설현황 저장 완료" : "Google Sheets 저장 완료");
+  } catch (error) {
+    console.warn("Google Sheets 타설현황 저장 실패 / 로컬 저장만 완료", error);
+    showToast("Google Sheets 저장 실패 / 로컬 저장만 완료");
+  }
+}
+
 function setTab(tab) {
   document.querySelectorAll(".tab-view").forEach(view => {
     view.classList.toggle("active", view.id === `tab-${tab}`);
@@ -1730,10 +1849,10 @@ function showUndoToast(message) {
 
 function restoreLastDeletedEntry() {
   if (!lastDeletedEntry) return;
-  const { type, item } = lastDeletedEntry;
-  if (type === "compression") writeCompressionStrengthData([item].concat(readCompressionStrengthData()));
-  if (type === "concretePour") writeConcretePourData([item].concat(readConcretePourData()));
-  if (type === "material") writeMaterialApprovalData([item].concat(readMaterialApprovalData()));
+  const { type, item, items } = lastDeletedEntry;
+  if (type === "compression") writeCompressionStrengthData((items || [item]).concat(readCompressionStrengthData()));
+  if (type === "concretePour") writeConcretePourData((items || [item]).concat(readConcretePourData()));
+  if (type === "material") writeMaterialApprovalData((items || [item]).concat(readMaterialApprovalData()));
   refreshCompressionViews();
   refreshConcretePourViews();
   renderMaterialList();
@@ -1741,6 +1860,28 @@ function restoreLastDeletedEntry() {
   lastDeletedEntry = null;
   clearTimeout(undoTimer);
   showToast("삭제를 취소했습니다.");
+}
+
+function clearAllData(type) {
+  if (!confirm("정말 전체 데이터를 삭제하시겠습니까?")) return;
+  if (type === "compression") {
+    const rows = readCompressionStrengthData();
+    if (!rows.length) return showToast("삭제할 압축강도 데이터가 없습니다.");
+    localStorage.removeItem(mobilePortalConfig.compressionStorageKey);
+    compressionStrengthData = [];
+    lastDeletedEntry = { type, items: rows };
+    refreshCompressionViews();
+  }
+  if (type === "concretePour") {
+    const rows = readConcretePourData();
+    if (!rows.length) return showToast("삭제할 타설현황 데이터가 없습니다.");
+    localStorage.removeItem(mobilePortalConfig.concretePourStorageKey);
+    concretePourData = [];
+    lastDeletedEntry = { type, items: rows };
+    refreshConcretePourViews();
+  }
+  postDataMutationToGoogleSheets(type, "delete", { all: true }).catch(error => console.warn("Google Sheets 전체삭제 연동 실패", error));
+  showUndoToast("전체 데이터가 삭제되었습니다.");
 }
 
 function setDefaultDate() {
@@ -1796,6 +1937,13 @@ function setupMobilePortal() {
   document.getElementById("compressionList")?.addEventListener("click", handleListAction);
   document.getElementById("concretePourList")?.addEventListener("click", handleListAction);
   document.getElementById("materialList")?.addEventListener("click", handleListAction);
+  document.getElementById("concretePourExcelInput")?.addEventListener("change", event => {
+    handleConcretePourExcelUpload(event.currentTarget.files?.[0]);
+    event.currentTarget.value = "";
+  });
+  document.getElementById("saveConcretePourExcelButton")?.addEventListener("click", saveConcretePourExcelRows);
+  document.getElementById("clearConcretePourButton")?.addEventListener("click", () => clearAllData("concretePour"));
+  document.getElementById("clearCompressionButton")?.addEventListener("click", () => clearAllData("compression"));
 
   mobileInputForm.addEventListener("submit", async event => {
     event.preventDefault();
