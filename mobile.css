@@ -800,12 +800,54 @@ textarea:focus {
   z-index: 30;
   width: min(560px, 100%);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   transform: translateX(-50%);
   background: #fff;
   border: 1px solid var(--line);
   border-bottom: 0;
   box-shadow: 0 -10px 26px rgba(11, 31, 58, .12);
+}
+
+.preview-help {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ocr-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #EEF0F3;
+  background: #fff;
+}
+
+.ocr-preview-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ocr-preview-table th {
+  background: var(--navy);
+  color: #fff;
+  padding: 9px 7px;
+  white-space: nowrap;
+}
+
+.ocr-preview-table td {
+  border-top: 1px solid #EEF0F3;
+  padding: 6px;
+  text-align: center;
+}
+
+.ocr-preview-table input {
+  width: 100%;
+  min-width: 70px;
+  min-height: 34px;
+  padding: 6px;
+  border: 1px solid #D9DDE3;
+  border-radius: 4px;
+  font: inherit;
 }
 
 .bottom-nav-button {
