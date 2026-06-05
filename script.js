@@ -41,6 +41,19 @@ const badgeMap = {
 const pageNumbers = Object.fromEntries(menuItems.map(([key, number]) => [key, number]));
 const compressionStorageKey =
   window.qualityPortalStorageKeys?.compressionStrength || "qualityPortal_compressionStrengthData";
+const googleScriptUrl = (window.GOOGLE_SCRIPT_URL || "").trim();
+
+function isGoogleSyncEnabled() {
+  return Boolean(googleScriptUrl && !googleScriptUrl.includes("여기에_Apps_Script_Web_App_URL_입력"));
+}
+
+function normalizeGoogleRows(payload) {
+  const rows = Array.isArray(payload)
+    ? payload
+    : payload?.compressionStrength || payload?.compressionStrengthData || payload?.data || payload?.rows || [];
+
+  return Array.isArray(rows) ? rows.map(normalizeCompressionRecord) : [];
+}
 
 function readCompressionStorageData() {
   try {
@@ -49,6 +62,25 @@ function readCompressionStorageData() {
   } catch {
     return [];
   }
+}
+
+function writeCompressionStorageData(entries) {
+  localStorage.setItem(compressionStorageKey, JSON.stringify(entries.map(normalizeCompressionRecord)));
+}
+
+async function fetchCompressionDataFromGoogleSheets() {
+  if (!isGoogleSyncEnabled()) return null;
+
+  const url = new URL(googleScriptUrl);
+  url.searchParams.set("type", "compressionStrength");
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    cache: "no-store"
+  });
+
+  if (!response.ok) throw new Error(`Google Sheets GET failed: ${response.status}`);
+  return normalizeGoogleRows(await response.json());
 }
 
 function normalizeCompressionRecord(record) {
@@ -102,6 +134,20 @@ function syncCompressionDataFromStorage() {
   if (!qualityPortalData.compressive) return;
   const baseRows = qualityPortalData.compressive.rows.filter(row => row.__source !== "localStorage");
   qualityPortalData.compressive.rows = baseRows.concat(readCompressionStorageData().map(mapCompressionRecordToRow));
+}
+
+async function syncCompressionDataFromGoogleSheets() {
+  try {
+    const rows = await fetchCompressionDataFromGoogleSheets();
+    if (!rows) return false;
+    writeCompressionStorageData(rows);
+    refreshPortalViews();
+    return true;
+  } catch (error) {
+    console.warn("Google Sheets 데이터를 불러오지 못해 localStorage 데이터를 사용합니다.", error);
+    syncCompressionDataFromStorage();
+    return false;
+  }
 }
 
 function refreshPortalViews() {
@@ -617,6 +663,7 @@ function init() {
   if (document.getElementById(initialTarget)) showView(initialTarget);
   window.showQualityPortalView = showView;
   window.__qualityPortalReady = true;
+  syncCompressionDataFromGoogleSheets();
 }
 
 document.addEventListener("DOMContentLoaded", init);
