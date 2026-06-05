@@ -1,8 +1,9 @@
 const mobilePortalConfig = {
-  version: "20260604-google-sync1",
+  version: "20260604-concrete-pour1",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
   storageKey: "sillim2MobileOcrTest4PhotoRegisterData",
   compressionStorageKey: "qualityPortal_compressionStrengthData",
+  concretePourStorageKey: "qualityPortal_concretePourData",
   futureSync: {
     source: "mobile.html",
     target: "Tesseract.js / Google Sheets / Apps Script / OCR API",
@@ -11,13 +12,14 @@ const mobilePortalConfig = {
 };
 
 let compressionStrengthData = [];
+let concretePourData = [];
 const materialApprovalData = [];
 let photoRegisterData = [];
 
 const mobileDashboardCards = [
   { no: "01", id: "compressive", title: "콘크리트 압축강도", icon: "cube" },
   { no: "02", id: "materialApproval", title: "자재공급원 승인", icon: "clipboard" },
-  { no: "03", id: "readyMix", title: "레미콘 타설현황", icon: "truck" },
+  { no: "03", id: "readyMix", title: "콘크리트 타설현황", icon: "truck" },
   { no: "04", id: "requestTest", title: "의뢰시험현황", icon: "flask" },
   { no: "05", id: "materialArch", title: "자재승인(건축)", icon: "building" },
   { no: "06", id: "materialCivil", title: "자재승인(토목)", icon: "rebar" },
@@ -41,7 +43,8 @@ const mobileInputTypes = {
   pouringAreaPhoto: { no: "04", label: "타설부위 사진", syncTarget: "compressionStrengthData" },
   approvalDocPhoto: { no: "05", label: "자재승인서 사진", syncTarget: "materialApprovalData" },
   materialInspectionPhoto: { no: "06", label: "자재검수 사진", syncTarget: "materialApprovalData" },
-  ksCertificatePhoto: { no: "07", label: "시험성적서/KS인증서 사진", syncTarget: "materialApprovalData" }
+  ksCertificatePhoto: { no: "07", label: "시험성적서/KS인증서 사진", syncTarget: "materialApprovalData" },
+  concretePourTablePhoto: { no: "08", label: "콘크리트 타설현황표 사진", syncTarget: "concretePourData" }
 };
 
 let selectedEntryType = "specimenPhoto";
@@ -58,6 +61,14 @@ function normalizeGoogleRows(payload) {
     : payload?.compressionStrength || payload?.compressionStrengthData || payload?.data || payload?.rows || [];
 
   return Array.isArray(rows) ? rows.map(normalizeCompressionRecord) : [];
+}
+
+function normalizeGoogleConcreteRows(payload) {
+  const rows = Array.isArray(payload)
+    ? payload
+    : payload?.concretePour || payload?.concretePourData || payload?.data || payload?.rows || [];
+
+  return Array.isArray(rows) ? rows.map(normalizeConcretePourRecord) : [];
 }
 
 const boardOcrRegions = {
@@ -132,6 +143,35 @@ function writeCompressionStrengthData(entries) {
   localStorage.setItem(mobilePortalConfig.compressionStorageKey, JSON.stringify(compressionStrengthData));
 }
 
+function normalizeConcretePourRecord(record) {
+  return {
+    id: record.id || `concrete-pour-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    no: String(record.no || "").trim(),
+    pourDate: String(record.pourDate || record["타설일자"] || "").trim(),
+    spec: String(record.spec || record["규격"] || "").trim(),
+    location: String(record.location || record["타설위치"] || record.pouringLocation || "").trim(),
+    quantity: String(record.quantity || record["물량"] || "").trim(),
+    manufacturer: String(record.manufacturer || record["제조사"] || "").trim(),
+    batch: String(record.batch || record["회차"] || "").trim(),
+    note: String(record.note || record["비고"] || "").trim(),
+    createdAt: record.createdAt || new Date().toISOString()
+  };
+}
+
+function readConcretePourData() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(mobilePortalConfig.concretePourStorageKey) || "[]");
+    return Array.isArray(parsed) ? parsed.map(normalizeConcretePourRecord) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeConcretePourData(entries) {
+  concretePourData = entries.map(normalizeConcretePourRecord);
+  localStorage.setItem(mobilePortalConfig.concretePourStorageKey, JSON.stringify(concretePourData));
+}
+
 async function fetchCompressionDataFromGoogleSheets() {
   if (!isGoogleSyncEnabled()) return null;
 
@@ -145,6 +185,21 @@ async function fetchCompressionDataFromGoogleSheets() {
 
   if (!response.ok) throw new Error(`Google Sheets GET failed: ${response.status}`);
   return normalizeGoogleRows(await response.json());
+}
+
+async function fetchConcretePourDataFromGoogleSheets() {
+  if (!isGoogleSyncEnabled()) return null;
+
+  const url = new URL(googleScriptUrl);
+  url.searchParams.set("type", "concretePour");
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    cache: "no-store"
+  });
+
+  if (!response.ok) throw new Error(`Google Sheets concretePour GET failed: ${response.status}`);
+  return normalizeGoogleConcreteRows(await response.json());
 }
 
 async function loadCompressionData() {
@@ -161,6 +216,24 @@ async function loadCompressionData() {
     console.warn("Google Sheets 데이터를 불러오지 못해 localStorage 데이터를 사용합니다.", error);
     compressionStrengthData = readCompressionStrengthData();
     refreshCompressionViews();
+    return false;
+  }
+}
+
+async function loadConcretePourData() {
+  concretePourData = readConcretePourData();
+  refreshConcretePourViews();
+
+  try {
+    const googleRows = await fetchConcretePourDataFromGoogleSheets();
+    if (!googleRows) return false;
+    writeConcretePourData(googleRows);
+    refreshConcretePourViews();
+    return true;
+  } catch (error) {
+    console.warn("Google Sheets 타설현황 데이터를 불러오지 못해 localStorage 데이터를 사용합니다.", error);
+    concretePourData = readConcretePourData();
+    refreshConcretePourViews();
     return false;
   }
 }
@@ -198,6 +271,41 @@ async function postCompressionDataToGoogleSheets(record) {
   return { skipped: false };
 }
 
+function makeGoogleConcretePourPayload(record) {
+  const item = normalizeConcretePourRecord(record);
+  return {
+    type: "concretePour",
+    id: item.id,
+    no: item.no,
+    pourDate: item.pourDate,
+    spec: item.spec,
+    location: item.location,
+    quantity: item.quantity,
+    manufacturer: item.manufacturer,
+    batch: item.batch,
+    note: item.note,
+    createdAt: item.createdAt
+  };
+}
+
+async function postConcretePourDataToGoogleSheets(records) {
+  if (!isGoogleSyncEnabled()) return { skipped: true };
+
+  const response = await fetch(googleScriptUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      type: "concretePour",
+      rows: records.map(makeGoogleConcretePourPayload)
+    })
+  });
+
+  if (!response.ok) throw new Error(`Google Sheets concretePour POST failed: ${response.status}`);
+  return { skipped: false };
+}
+
 function countCompressionResults(records = compressionStrengthData) {
   const normalized = records.map(normalizeCompressionRecord);
   return {
@@ -222,11 +330,50 @@ function getCompressionSummaryCards() {
   ];
 }
 
+function parseQuantity(value) {
+  const parsed = Number(String(value || "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getCurrentMonthKey() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function getConcretePourSummaryCards() {
+  const monthKey = getCurrentMonthKey();
+  const totalQuantity = concretePourData.reduce((sum, item) => sum + parseQuantity(item.quantity), 0);
+  const monthRows = concretePourData.filter(item => String(item.pourDate || "").startsWith(monthKey));
+  const monthQuantity = monthRows.reduce((sum, item) => sum + parseQuantity(item.quantity), 0);
+  const makerTotals = concretePourData.reduce((acc, item) => {
+    const maker = item.manufacturer || "미분류";
+    acc[maker] = (acc[maker] || 0) + parseQuantity(item.quantity);
+    return acc;
+  }, {});
+  const makerText = Object.entries(makerTotals)
+    .map(([maker, quantity]) => `${maker} ${quantity}m³`)
+    .join(" / ") || "제조사별 데이터 없음";
+
+  return [
+    { title: "전체 타설 건수", value: concretePourData.length, unit: "건", foot: `누계 ${concretePourData.length}건` },
+    { title: "총 타설 물량", value: totalQuantity, unit: "m³", foot: `누계 ${totalQuantity}m³` },
+    { title: "금월 타설 건수", value: monthRows.length, unit: "건", foot: `${monthKey} 기준` },
+    { title: "금월 타설 물량", value: monthQuantity, unit: "m³", foot: `${monthKey} 기준` },
+    { title: "제조사별 타설량", value: Object.keys(makerTotals).length, unit: "개사", foot: makerText }
+  ];
+}
+
 function refreshCompressionViews() {
   compressionStrengthData = readCompressionStrengthData();
   renderDashboardCards();
   renderMetricCards("compressionSummaryCards", getCompressionSummaryCards());
   renderCompressionList();
+}
+
+function refreshConcretePourViews() {
+  concretePourData = readConcretePourData();
+  renderDashboardCards();
+  renderMetricCards("concretePourSummaryCards", getConcretePourSummaryCards());
+  renderConcretePourList();
 }
 
 function setOcrStatus(message, state = "") {
@@ -445,6 +592,47 @@ function extractBoardRegions(regionTexts) {
   };
 }
 
+function normalizePourDate(value) {
+  const match = String(value || "").match(/(20\d{2})\D+(\d{1,2})\D+(\d{1,2})/);
+  return match ? formatDateParts(match[1], match[2], match[3]) : String(value || "").trim();
+}
+
+function parseConcretePourRows(text) {
+  const lines = normalizeOcrText(text)
+    .split("\n")
+    .map(line => line
+      .replace(/[|]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim())
+    .filter(Boolean)
+    .filter(line => !/콘크리트\s*타설현황|현장명|No\.?|타설일자|타설위치|물량|제조사|비고/i.test(line));
+
+  return lines.map(line => {
+    const match = line.match(/^(\d{1,4})\s+(20\d{2}[-./]\d{1,2}[-./]\d{1,2})\s+(\d{2}\s*[-–—]\s*\d{2,3}\s*[-–—]\s*\d{2,3})\s+(.+?)\s+(\d+(?:\.\d+)?)\s+([가-힣A-Za-z0-9()㈜.\-]+)(?:\s+([가-힣A-Za-z0-9()㈜.\-]+))?(?:\s+(.+))?$/);
+    if (!match) return null;
+    return normalizeConcretePourRecord({
+      no: match[1],
+      pourDate: normalizePourDate(match[2]),
+      spec: match[3].replace(/\s+/g, "").replace(/[–—]/g, "-"),
+      location: match[4].trim(),
+      quantity: match[5],
+      manufacturer: match[6],
+      batch: match[8] ? match[7] : "",
+      note: match[8] || match[7] || ""
+    });
+  }).filter(Boolean);
+}
+
+function buildConcretePourDebugText(text, rows) {
+  return [
+    "[콘크리트 타설현황표 OCR 원문]",
+    normalizeOcrText(text || "(인식 없음)"),
+    "",
+    "[추출 행]",
+    rows.length ? rows.map(row => `${row.no} / ${row.pourDate} / ${row.spec} / ${row.location} / ${row.quantity} / ${row.manufacturer} / ${row.batch} / ${row.note}`).join("\n") : "추출된 행 없음"
+  ].join("\n");
+}
+
 function mergeMissingExtraction(primary, fallback) {
   const merged = { compression: { ...primary.compression } };
   Object.entries(fallback?.compression || {}).forEach(([key, value]) => {
@@ -457,6 +645,10 @@ function mergeMissingExtraction(primary, fallback) {
 
 function countFilledExtraction(result) {
   return Object.values(result?.compression || {}).filter(Boolean).length;
+}
+
+function isConcretePourEntryType() {
+  return selectedEntryType === "concretePourTablePhoto";
 }
 
 function extractPouringArea(text) {
@@ -509,6 +701,47 @@ function populateOcrFields(result) {
   updateOcrConfidenceStatus(result);
 }
 
+function renderConcretePourPreviewRows(rows = []) {
+  const target = document.getElementById("concretePourPreviewBody");
+  if (!target) return;
+  const displayRows = rows.length ? rows : [];
+  if (!displayRows.length) {
+    target.innerHTML = `<tr><td colspan="8">콘크리트 타설현황표 사진 업로드 시 OCR 결과가 표시됩니다.</td></tr>`;
+    return;
+  }
+
+  target.innerHTML = displayRows.map(row => `
+    <tr>
+      <td><input name="concretePour_no" value="${escapeHtml(row.no)}"></td>
+      <td><input name="concretePour_pourDate" value="${escapeHtml(row.pourDate)}"></td>
+      <td><input name="concretePour_spec" value="${escapeHtml(row.spec)}"></td>
+      <td><input name="concretePour_location" value="${escapeHtml(row.location)}"></td>
+      <td><input name="concretePour_quantity" value="${escapeHtml(row.quantity)}"></td>
+      <td><input name="concretePour_manufacturer" value="${escapeHtml(row.manufacturer)}"></td>
+      <td><input name="concretePour_batch" value="${escapeHtml(row.batch)}"></td>
+      <td><input name="concretePour_note" value="${escapeHtml(row.note)}"></td>
+    </tr>
+  `).join("");
+}
+
+function getConcretePourPreviewRows() {
+  const body = document.getElementById("concretePourPreviewBody");
+  if (!body) return [];
+  return [...body.querySelectorAll("tr")].map(row => {
+    const get = name => row.querySelector(`[name="${name}"]`)?.value.trim() || "";
+    return normalizeConcretePourRecord({
+      no: get("concretePour_no"),
+      pourDate: get("concretePour_pourDate"),
+      spec: get("concretePour_spec"),
+      location: get("concretePour_location"),
+      quantity: get("concretePour_quantity"),
+      manufacturer: get("concretePour_manufacturer"),
+      batch: get("concretePour_batch"),
+      note: get("concretePour_note")
+    });
+  }).filter(row => row.pourDate || row.location || row.quantity || row.manufacturer);
+}
+
 function updateOcrConfidenceStatus(result) {
   const values = Object.values(result?.compression || {});
   const filledCount = values.filter(Boolean).length;
@@ -527,6 +760,7 @@ function clearOcrFields() {
   document.querySelectorAll('[name^="ocrCompression_"]').forEach(input => {
     input.value = "";
   });
+  renderConcretePourPreviewRows([]);
   setOcrConfidenceStatus("확인 대기");
 }
 
@@ -665,6 +899,22 @@ async function handlePhotoOcr(file) {
   setOcrStatus("OCR 분석 중입니다", "running");
   setOcrConfidenceStatus("확인 대기");
   try {
+    if (isConcretePourEntryType()) {
+      const preprocessedImage = await preprocessImageForOcr(file).catch(() => file);
+      const tableText = await recognizeImage(tesseractEngine, preprocessedImage, progress => {
+        if (progress.status === "recognizing text" && Number.isFinite(progress.progress)) {
+          const percent = Math.round(progress.progress * 100);
+          setOcrStatus(`콘크리트 타설현황표 OCR 분석 중입니다 ${percent}%`, "running");
+        }
+      });
+      const rows = parseConcretePourRows(tableText);
+      document.getElementById("ocrRawText").value = buildConcretePourDebugText(tableText, rows);
+      renderConcretePourPreviewRows(rows);
+      setOcrStatus(rows.length ? "콘크리트 타설현황표 OCR 분석 완료, 추출 행을 검증 후 저장하세요" : "OCR 인식 실패, 직접 입력해주세요", rows.length ? "success" : "error");
+      setOcrConfidenceStatus(rows.length ? (rows.length >= 3 ? "인식 성공" : "확인 필요") : "인식 실패", rows.length ? (rows.length >= 3 ? "success" : "review") : "error");
+      return;
+    }
+
     const regionResult = await recognizeBoardRegions(file, tesseractEngine);
     let extracted = regionResult.extracted;
     let fallbackText = "";
@@ -703,11 +953,18 @@ function escapeHtml(value) {
 function renderDashboardCards() {
   const target = document.getElementById("mobileDashboardCards");
   const compressionCounts = countCompressionResults();
+  const concreteTotalQuantity = concretePourData.reduce((sum, item) => sum + parseQuantity(item.quantity), 0);
   const getMetric = card => {
     if (card.id === "compressive") {
       return {
         note: compressionCounts.total ? `결과등록 ${compressionCounts.resultRegistered}건 · 결과대기 ${compressionCounts.resultPending}건` : "등록된 데이터 없음",
         value: compressionCounts.total
+      };
+    }
+    if (card.id === "readyMix") {
+      return {
+        note: concretePourData.length ? `총 물량 ${concreteTotalQuantity}m³` : "등록된 데이터 없음",
+        value: concretePourData.length
       };
     }
     return { note: "등록된 데이터 없음", value: 0 };
@@ -795,6 +1052,35 @@ function renderMaterialList() {
   `).join("");
 }
 
+function renderConcretePourList() {
+  const target = document.getElementById("concretePourList");
+  if (!target) return;
+  if (!concretePourData.length) {
+    target.innerHTML = `
+      <article class="data-empty">
+        <strong>등록된 콘크리트 타설현황 데이터가 없습니다.</strong>
+        <p>타설현황표 사진을 등록하면 No., 타설일자, 규격, 타설위치, 물량, 제조사, 회차, 비고가 표시됩니다.</p>
+      </article>
+    `;
+    return;
+  }
+
+  target.innerHTML = concretePourData.map(item => `
+    <article class="data-item">
+      <h3>${escapeHtml(item.location || "타설위치 미입력")}</h3>
+      <div class="data-fields">
+        ${dataField("No.", item.no)}
+        ${dataField("타설일자", item.pourDate)}
+        ${dataField("규격", item.spec)}
+        ${dataField("물량", item.quantity ? `${item.quantity}m³` : "")}
+        ${dataField("제조사", item.manufacturer)}
+        ${dataField("회차", item.batch)}
+        ${dataField("비고", item.note)}
+      </div>
+    </article>
+  `).join("");
+}
+
 function dataField(label, value) {
   return `
     <div class="data-field">
@@ -871,7 +1157,8 @@ function makeEntry(formData) {
         day28Strength: String(formData.get("ocrCompression_day28Strength") || "").trim(),
         averageStrength: String(formData.get("ocrCompression_averageStrength") || "").trim(),
         manufacturer: String(formData.get("ocrCompression_manufacturer") || "").trim()
-      }
+      },
+      concretePour: getConcretePourPreviewRows()
     },
     photo: photo && photo.name ? {
       name: photo.name,
@@ -905,12 +1192,15 @@ function hasOcrCompressionData(data) {
 
 function validateMobileInput(formData) {
   const ocrData = getOcrCompressionData(formData);
+  const concretePourRows = getConcretePourPreviewRows();
+  if (concretePourRows.length) return { valid: true, ocrData, concretePourRows };
   if (hasOcrCompressionData(ocrData)) return { valid: true, ocrData };
   const title = String(formData.get("title") || "").trim();
   const date = String(formData.get("date") || "").trim();
   return {
     valid: Boolean(title && date),
-    ocrData
+    ocrData,
+    concretePourRows
   };
 }
 
@@ -947,6 +1237,9 @@ function setEntryType(type) {
   document.querySelectorAll(".action-button").forEach(button => {
     button.classList.toggle("active", button.dataset.entryType === type);
   });
+  setOcrStatus(type === "concretePourTablePhoto"
+    ? "콘크리트 타설현황표 사진 업로드 시 OCR 분석을 실행합니다."
+    : "압축강도 보드판 사진 업로드 시 OCR 분석을 실행합니다.");
 }
 
 function setTab(tab) {
@@ -978,15 +1271,19 @@ function setupMobilePortal() {
   document.documentElement.dataset.ocrEngine = getTesseractEngine() ? "ready" : "missing";
   photoRegisterData = readPhotoRegisterData();
   compressionStrengthData = readCompressionStrengthData();
+  concretePourData = readConcretePourData();
   renderDashboardCards();
+  renderMetricCards("concretePourSummaryCards", getConcretePourSummaryCards());
   renderMetricCards("compressionSummaryCards", getCompressionSummaryCards());
   renderMetricCards("materialSummaryCards", materialSummary);
   renderCompressionList();
+  renderConcretePourList();
   renderMaterialList();
   renderStatusList();
   setDefaultDate();
   setEntryType(selectedEntryType);
   loadCompressionData();
+  loadConcretePourData();
 
   document.querySelectorAll("[data-tab]").forEach(button => {
     button.addEventListener("click", () => setTab(button.dataset.tab));
@@ -1028,6 +1325,8 @@ function setupMobilePortal() {
     writePhotoRegisterData(entries);
 
     const hasOcrData = hasOcrCompressionData(validation.ocrData);
+    const concretePourRows = validation.concretePourRows || [];
+    const hasConcretePourData = concretePourRows.length > 0;
     let googleMessage = "";
     if (hasOcrData) {
       const compressionRecord = makeCompressionRecord(validation.ocrData, formData);
@@ -1045,6 +1344,26 @@ function setupMobilePortal() {
       }
     }
 
+    if (hasConcretePourData) {
+      const createdAt = new Date().toISOString();
+      const concreteRecords = concretePourRows.map(row => normalizeConcretePourRecord({
+        ...row,
+        id: row.id || `concrete-pour-${Date.now()}-${row.no || Math.random().toString(16).slice(2)}`,
+        createdAt
+      }));
+      const pourEntries = readConcretePourData();
+      writeConcretePourData(concreteRecords.concat(pourEntries));
+      refreshConcretePourViews();
+
+      try {
+        const googleResult = await postConcretePourDataToGoogleSheets(concreteRecords);
+        googleMessage = googleResult.skipped ? "콘크리트 타설현황에 저장되었습니다" : "Google Sheets 저장 완료";
+      } catch (error) {
+        console.warn("Google Sheets 타설현황 저장 실패 / 로컬 저장만 완료", error);
+        googleMessage = "Google Sheets 저장 실패 / 로컬 저장만 완료";
+      }
+    }
+
     renderStatusList();
     event.currentTarget.reset();
     latestOcrFile = null;
@@ -1052,12 +1371,13 @@ function setupMobilePortal() {
     clearOcrFields();
     setOcrStatus("압축강도 보드판 사진 업로드 시 OCR 분석을 실행합니다.");
     setDefaultDate();
-    setTab(hasOcrData ? "compression" : "status");
-    showToast(hasOcrData ? googleMessage : "사진 등록 데이터가 임시 저장되었습니다.");
+    setTab(hasConcretePourData ? "pour" : hasOcrData ? "compression" : "status");
+    showToast((hasOcrData || hasConcretePourData) ? googleMessage : "사진 등록 데이터가 임시 저장되었습니다.");
   });
 
   window.addEventListener("storage", event => {
     if (event.key === mobilePortalConfig.compressionStorageKey) refreshCompressionViews();
+    if (event.key === mobilePortalConfig.concretePourStorageKey) refreshConcretePourViews();
   });
 }
 
@@ -1082,7 +1402,10 @@ window.mobileQualityPortalStore = {
   writePhotoRegisterData,
   readCompressionStrengthData,
   writeCompressionStrengthData,
-  countCompressionResults
+  countCompressionResults,
+  readConcretePourData,
+  writeConcretePourData,
+  parseConcretePourRows
 };
 
 document.addEventListener("DOMContentLoaded", setupMobilePortal);
