@@ -1,5 +1,5 @@
 const mobilePortalConfig = {
-  version: "20260604-concrete-pour1",
+  version: "20260604-concrete-pour2",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
   storageKey: "sillim2MobileOcrTest4PhotoRegisterData",
   compressionStorageKey: "qualityPortal_compressionStrengthData",
@@ -79,6 +79,22 @@ const boardOcrRegions = {
   average: { label: "평균강도 값 영역", x: 0.78, y: 0.47, w: 0.18, h: 0.22 },
   testDate: { label: "시험일자 년/월/일 영역", x: 0.42, y: 0.73, w: 0.36, h: 0.10 },
   manufacturer: { label: "제조사 값 영역", x: 0.18, y: 0.82, w: 0.55, h: 0.08 }
+};
+
+const concretePourOcrLayout = {
+  table: { x: 0.0, y: 0.265, w: 1.0, h: 0.72 },
+  rowHeight: 0.081,
+  maxRows: 22,
+  columns: [
+    ["no", "No.", 0.000, 0.104],
+    ["pourDate", "타설일자", 0.104, 0.208],
+    ["spec", "규격", 0.208, 0.312],
+    ["location", "타설위치", 0.312, 0.725],
+    ["quantity", "물량", 0.725, 0.792],
+    ["manufacturer", "제조사", 0.792, 0.848],
+    ["batch", "회차", 0.848, 0.932],
+    ["note", "비고", 0.932, 1.000]
+  ]
 };
 
 function iconSvg(name) {
@@ -597,6 +613,93 @@ function normalizePourDate(value) {
   return match ? formatDateParts(match[1], match[2], match[3]) : String(value || "").trim();
 }
 
+function normalizeConcreteCellValue(key, value) {
+  const text = cleanupRegionText(value)
+    .replace(/[|_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (key === "no") {
+    return (text.match(/\d{1,4}/) || [""])[0];
+  }
+  if (key === "pourDate") {
+    return normalizePourDate(text.replace(/[년월.\/]/g, "-").replace(/일/g, ""));
+  }
+  if (key === "spec") {
+    const match = text.match(/(\d{2})\D+(\d{2,3})\D+(\d{2,3})/);
+    return match ? `${match[1]}-${match[2]}-${match[3]}` : text.replace(/\s+/g, "");
+  }
+  if (key === "quantity") {
+    return (text.match(/\d+(?:\.\d+)?/) || [""])[0];
+  }
+  if (key === "manufacturer") {
+    if (/한\s*일|하\s*일|한입/.test(text)) return "한일";
+    if (/쌍\s*용|상\s*용|쌍용/.test(text)) return "쌍용";
+    return text.replace(/[^가-힣A-Za-z0-9㈜().-]/g, "");
+  }
+  if (key === "note") {
+    if (/가\s*설|가설/.test(text)) return "가설";
+    if (/본\s*타\s*설|본타설/.test(text)) return "본타설";
+    return text.replace(/[^가-힣A-Za-z0-9/().-]/g, "");
+  }
+  return text;
+}
+
+function isEmptyConcretePourRow(row) {
+  return ![row.no, row.pourDate, row.spec, row.location, row.quantity, row.manufacturer, row.batch, row.note].some(Boolean);
+}
+
+async function recognizeConcretePourTableByCells(file, tesseractEngine) {
+  const image = await loadImageFromFile(file);
+  const sourceCanvas = drawImageToCanvas(image);
+  const tableCanvas = cropRatioToCanvas(sourceCanvas, concretePourOcrLayout.table, 1);
+  const tablePreviewUrl = tableCanvas.toDataURL("image/png");
+  const rows = [];
+  const debugLines = [
+    "[콘크리트 타설현황표 셀 단위 OCR]",
+    `tableCropPreview=${tablePreviewUrl.slice(0, 180)}...`
+  ];
+
+  for (let rowIndex = 0; rowIndex < concretePourOcrLayout.maxRows; rowIndex += 1) {
+    const y = rowIndex * concretePourOcrLayout.rowHeight;
+    if (y + concretePourOcrLayout.rowHeight > 1) break;
+
+    const row = {};
+    const rawCells = {};
+
+    for (const [key, label, x1, x2] of concretePourOcrLayout.columns) {
+      setOcrStatus(`콘크리트 타설현황표 셀 OCR ${rowIndex + 1}행 ${label}`, "running");
+      const cellCanvas = cropRatioToCanvas(tableCanvas, {
+        x: x1,
+        y,
+        w: x2 - x1,
+        h: concretePourOcrLayout.rowHeight
+      }, key === "location" ? 2.0 : 2.8);
+      const raw = await recognizeCellImage(tesseractEngine, cellCanvas);
+      rawCells[key] = raw;
+      row[key] = normalizeConcreteCellValue(key, raw);
+    }
+
+    const normalizedRow = normalizeConcretePourRecord(row);
+    debugLines.push(`\n## ${rowIndex + 1}행`);
+    concretePourOcrLayout.columns.forEach(([key, label]) => {
+      debugLines.push(`${label}: ${rawCells[key] || "(인식 없음)"} => ${normalizedRow[key] || "-"}`);
+    });
+
+    if (isEmptyConcretePourRow(normalizedRow)) {
+      if (rows.length >= 1) break;
+      continue;
+    }
+    rows.push(normalizedRow);
+  }
+
+  return {
+    rows,
+    debugText: debugLines.join("\n"),
+    previewUrl: tablePreviewUrl
+  };
+}
+
 function parseConcretePourRows(text) {
   const lines = normalizeOcrText(text)
     .split("\n")
@@ -701,6 +804,24 @@ function populateOcrFields(result) {
   updateOcrConfidenceStatus(result);
 }
 
+function setConcretePourCropPreview(dataUrl = "") {
+  const rawBox = document.querySelector(".ocr-raw-box");
+  if (!rawBox) return;
+  let preview = document.getElementById("concretePourCropPreview");
+  if (!dataUrl) {
+    if (preview) preview.remove();
+    return;
+  }
+  if (!preview) {
+    preview = document.createElement("img");
+    preview.id = "concretePourCropPreview";
+    preview.alt = "콘크리트 타설현황표 OCR crop 미리보기";
+    preview.style.cssText = "display:block;width:calc(100% - 24px);margin:0 12px 12px;border:1px solid #D9DDE3;background:#fff;";
+    rawBox.appendChild(preview);
+  }
+  preview.src = dataUrl;
+}
+
 function renderConcretePourPreviewRows(rows = []) {
   const target = document.getElementById("concretePourPreviewBody");
   if (!target) return;
@@ -761,6 +882,7 @@ function clearOcrFields() {
     input.value = "";
   });
   renderConcretePourPreviewRows([]);
+  setConcretePourCropPreview("");
   setOcrConfidenceStatus("확인 대기");
 }
 
@@ -848,10 +970,45 @@ function cropBoardRegionToCanvas(sourceCanvas, region) {
   return canvas;
 }
 
+function cropRatioToCanvas(sourceCanvas, region, scale = 2.2) {
+  const sx = Math.max(0, Math.round(region.x * sourceCanvas.width));
+  const sy = Math.max(0, Math.round(region.y * sourceCanvas.height));
+  const sw = Math.min(sourceCanvas.width - sx, Math.round(region.w * sourceCanvas.width));
+  const sh = Math.min(sourceCanvas.height - sy, Math.round(region.h * sourceCanvas.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sw * scale));
+  canvas.height = Math.max(1, Math.round(sh * scale));
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  const contrast = 1.55;
+  const threshold = 172;
+  for (let index = 0; index < data.length; index += 4) {
+    const gray = 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2];
+    const contrasted = Math.max(0, Math.min(255, (gray - 128) * contrast + 128));
+    const value = contrasted > threshold ? 255 : 0;
+    data[index] = value;
+    data[index + 1] = value;
+    data[index + 2] = value;
+  }
+  context.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
 async function recognizeImage(tesseractEngine, imageSource, logger) {
   const result = await tesseractEngine.recognize(imageSource, "kor+eng", {
     logger,
     tessedit_pageseg_mode: "6"
+  });
+  return normalizeOcrText(result?.data?.text || "");
+}
+
+async function recognizeCellImage(tesseractEngine, canvas) {
+  const result = await tesseractEngine.recognize(canvas.toDataURL("image/png"), "kor+eng", {
+    tessedit_pageseg_mode: "7",
+    tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허고노도로모보소오조초코토포호구누두루무부수우주추쿠투푸후기니디리미비시이지치키티피히-./()㎡mM³ "
   });
   return normalizeOcrText(result?.data?.text || "");
 }
@@ -900,15 +1057,22 @@ async function handlePhotoOcr(file) {
   setOcrConfidenceStatus("확인 대기");
   try {
     if (isConcretePourEntryType()) {
-      const preprocessedImage = await preprocessImageForOcr(file).catch(() => file);
-      const tableText = await recognizeImage(tesseractEngine, preprocessedImage, progress => {
-        if (progress.status === "recognizing text" && Number.isFinite(progress.progress)) {
-          const percent = Math.round(progress.progress * 100);
-          setOcrStatus(`콘크리트 타설현황표 OCR 분석 중입니다 ${percent}%`, "running");
-        }
-      });
-      const rows = parseConcretePourRows(tableText);
-      document.getElementById("ocrRawText").value = buildConcretePourDebugText(tableText, rows);
+      const cellResult = await recognizeConcretePourTableByCells(file, tesseractEngine);
+      let rows = cellResult.rows;
+      let debugText = cellResult.debugText;
+      setConcretePourCropPreview(cellResult.previewUrl);
+      if (!rows.length) {
+        const preprocessedImage = await preprocessImageForOcr(file).catch(() => file);
+        const fallbackText = await recognizeImage(tesseractEngine, preprocessedImage, progress => {
+          if (progress.status === "recognizing text" && Number.isFinite(progress.progress)) {
+            const percent = Math.round(progress.progress * 100);
+            setOcrStatus(`Fallback OCR 분석 중입니다 ${percent}%`, "running");
+          }
+        });
+        rows = parseConcretePourRows(fallbackText);
+        debugText = `${debugText}\n\n${buildConcretePourDebugText(fallbackText, rows)}`;
+      }
+      document.getElementById("ocrRawText").value = debugText;
       renderConcretePourPreviewRows(rows);
       setOcrStatus(rows.length ? "콘크리트 타설현황표 OCR 분석 완료, 추출 행을 검증 후 저장하세요" : "OCR 인식 실패, 직접 입력해주세요", rows.length ? "success" : "error");
       setOcrConfidenceStatus(rows.length ? (rows.length >= 3 ? "인식 성공" : "확인 필요") : "인식 실패", rows.length ? (rows.length >= 3 ? "success" : "review") : "error");
