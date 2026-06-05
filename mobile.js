@@ -1,5 +1,5 @@
 const mobilePortalConfig = {
-  version: "20260604-excel-upload1",
+  version: "20260604-excel-upload2",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
   storageKey: "sillim2MobileOcrTest4PhotoRegisterData",
   compressionStorageKey: "qualityPortal_compressionStrengthData",
@@ -196,8 +196,9 @@ function normalizeExcelCell(value) {
 }
 
 function parseConcretePourWorkbook(workbook) {
-  const sheet = workbook.Sheets.Sheet1;
-  if (!sheet) throw new Error("Sheet1 시트를 찾을 수 없습니다.");
+  const sheetName = workbook.Sheets["신림"] ? "신림" : workbook.SheetNames?.[0];
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) throw new Error("엑셀 시트를 찾을 수 없습니다.");
   const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" });
   return rows.slice(5).map((row, index) => normalizeConcretePourRecord({
     id: `concrete-pour-excel-${Date.now()}-${index}`,
@@ -205,12 +206,12 @@ function parseConcretePourWorkbook(workbook) {
     pourDate: excelDateToIso(row[1]),
     spec: normalizeExcelCell(row[2]),
     location: normalizeExcelCell(row[3]),
-    quantity: normalizeExcelCell(row[4]).replace(/[^0-9.]/g, ""),
-    manufacturer: normalizeConcreteCellValue("manufacturer", normalizeExcelCell(row[5])),
-    batch: normalizeExcelCell(row[6]),
-    note: normalizeConcreteCellValue("note", normalizeExcelCell(row[7])),
+    quantity: normalizeExcelCell(row[7]).replace(/[^0-9.]/g, ""),
+    manufacturer: normalizeConcreteCellValue("manufacturer", normalizeExcelCell(row[8])),
+    batch: normalizeExcelCell(row[9]),
+    note: normalizeConcreteCellValue("note", normalizeExcelCell(row[10])),
     createdAt: new Date().toISOString()
-  })).filter(row => !isEmptyConcretePourRow(row));
+  })).filter(row => row.no && row.pourDate);
 }
 
 function readConcretePourData() {
@@ -1789,7 +1790,7 @@ async function handleConcretePourExcelUpload(file) {
     showToast(`${rows.length}건을 엑셀에서 읽었습니다. 확인 후 저장하세요.`);
   } catch (error) {
     console.warn("콘크리트 타설현황 엑셀 업로드 실패", error);
-    showToast("엑셀 업로드 실패, 양식과 Sheet1을 확인해주세요.");
+    showToast("엑셀 업로드 실패, 신림 시트 또는 첫 번째 시트 양식을 확인해주세요.");
   }
 }
 
