@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./mobile.css?v=20260604-excel-upload2">
+  <link rel="stylesheet" href="./mobile.css?v=20260604-cleanup1">
 </head>
 <body>
   <main class="mobile-shell">
@@ -21,9 +21,9 @@
       </div>
 
       <div class="mobile-title">
-        <p>SMART QUALITY FIELD PORTAL</p>
-        <h1>모바일 현장 포털</h1>
-        <span>신림2재정비촉진구역 주택재개발정비사업</span>
+        <p>SMART QUALITY MANAGEMENT</p>
+        <h1>신림2재정비촉진구역 주택재개발정비사업</h1>
+        <span>품질은 우리의 자존심, 신뢰는 고객과의 약속입니다.</span>
       </div>
 
       <div class="mobile-status">
@@ -32,19 +32,22 @@
       </div>
     </header>
 
-    <nav class="mobile-tabs" aria-label="모바일 포털 탭">
-      <button class="tab-button active" type="button" data-tab="dashboard">대시보드</button>
+    <nav class="mobile-tabs" aria-label="모바일 포털 메뉴">
+      <button class="tab-button active" type="button" data-tab="dashboard">HOME</button>
       <button class="tab-button" type="button" data-tab="pour">타설현황</button>
       <button class="tab-button" type="button" data-tab="compression">압축강도</button>
-      <button class="tab-button" type="button" data-tab="material">자재승인</button>
       <button class="tab-button" type="button" data-tab="photo">사진등록</button>
-      <button class="tab-button" type="button" data-tab="status">현황</button>
+      <button class="tab-button" type="button" data-tab="kpi">KPI</button>
     </nav>
 
     <section class="tab-view active" id="tab-dashboard">
       <div class="section-head">
-        <p>DASHBOARD</p>
-        <h2>압축강도·자재승인 중심 현장 포털</h2>
+        <p>FIELD STATUS MENU</p>
+        <h2>품질관리 현황 조회</h2>
+      </div>
+      <div class="prestart-mobile">
+        <strong>착공 전 현장 안내</strong>
+        <span>현재 품질 데이터가 등록되지 않았습니다. 착공 후 실시간 품질 데이터가 반영됩니다.</span>
       </div>
       <div class="dashboard-grid" id="mobileDashboardCards"></div>
     </section>
@@ -62,7 +65,7 @@
         </label>
         <button class="action-button" type="button" id="saveConcretePourExcelButton">
           <span>저장</span>
-          <strong>타설현황 저장</strong>
+          <strong>신규 데이터 저장</strong>
         </button>
         <button class="action-button" type="button" id="clearConcretePourButton">
           <span>삭제</span>
@@ -107,99 +110,45 @@
       <div class="data-list" id="compressionList"></div>
     </section>
 
-    <section class="tab-view" id="tab-material">
-      <div class="section-head">
-        <p>MATERIAL APPROVAL</p>
-        <h2>자재공급원 승인</h2>
-      </div>
-      <div class="metric-grid" id="materialSummaryCards"></div>
-      <div class="data-list" id="materialList"></div>
-    </section>
-
     <section class="tab-view" id="tab-photo">
       <div class="section-head">
         <p>PHOTO REGISTER</p>
-        <h2>현장 사진 등록</h2>
+        <h2>압축강도 보드판 사진등록</h2>
       </div>
 
-      <div class="action-panel" aria-label="등록 유형 선택">
-        <button class="action-button active" type="button" data-entry-type="specimenPhoto">
-          <span>01</span>
-          <strong>공시체 사진</strong>
-        </button>
-        <button class="action-button" type="button" data-entry-type="compressionTestPhoto">
+      <div class="action-panel" aria-label="등록 유형">
+        <button class="action-button active" type="button" data-entry-type="compressionTestPhoto">
           <span>02</span>
-          <strong>압축강도 시험 사진</strong>
-        </button>
-        <button class="action-button" type="button" data-entry-type="testReportPhoto">
-          <span>03</span>
-          <strong>시험성적서 사진</strong>
-        </button>
-        <button class="action-button" type="button" data-entry-type="pouringAreaPhoto">
-          <span>04</span>
-          <strong>타설부위 사진</strong>
-        </button>
-        <button class="action-button" type="button" data-entry-type="approvalDocPhoto">
-          <span>05</span>
-          <strong>자재승인서 사진</strong>
-        </button>
-        <button class="action-button" type="button" data-entry-type="materialInspectionPhoto">
-          <span>06</span>
-          <strong>자재검수 사진</strong>
-        </button>
-        <button class="action-button" type="button" data-entry-type="ksCertificatePhoto">
-          <span>07</span>
-          <strong>시험성적서/KS인증서 사진</strong>
-        </button>
-        <button class="action-button" type="button" data-entry-type="concretePourTablePhoto">
-          <span>08</span>
-          <strong>콘크리트 타설현황표 사진</strong>
+          <strong>압축강도 보드판 사진</strong>
         </button>
       </div>
 
       <section class="form-card">
         <div class="form-head">
-          <span id="selectedTypeNo">01</span>
+          <span id="selectedTypeNo">02</span>
           <div>
-            <p>SELECTED PHOTO</p>
-            <h2 id="selectedTypeTitle">공시체 사진</h2>
+            <p>OCR TEST / VERIFY</p>
+            <h2 id="selectedTypeTitle">압축강도 보드판 사진</h2>
           </div>
         </div>
 
         <form id="mobileInputForm" novalidate>
           <label>
             제목
-            <input type="text" name="title" placeholder="예: 28일 압축강도 공시체 사진">
-          </label>
-          <label>
-            위치
-            <input type="text" name="location" placeholder="예: 품질시험실 / 타설부위">
-          </label>
-          <label>
-            공종
-            <input type="text" name="trade" placeholder="예: 건축 / 토목 / 조경">
+            <input type="text" name="title" placeholder="예: 압축강도 보드판 사진">
           </label>
           <label>
             날짜
             <input type="date" name="date">
           </label>
           <label>
-            상태
-            <select name="status">
-              <option value="등록">등록</option>
-              <option value="검토중">검토중</option>
-              <option value="완료">완료</option>
-              <option value="보완요청">보완요청</option>
-            </select>
-          </label>
-          <label>
             비고
-            <textarea name="note" placeholder="압축강도, 자재승인, 사진 확인 사항을 입력하세요."></textarea>
+            <textarea name="note" placeholder="OCR 확인 사항 또는 특이사항을 입력하세요."></textarea>
           </label>
           <label class="file-input">
-            사진 업로드
-            <input type="file" name="photo" accept="image/*,.jpg,.jpeg,.png,.pdf">
-            <small>사진 또는 PDF 파일을 선택할 수 있습니다.</small>
+            압축강도 보드판 사진 업로드
+            <input type="file" name="photo" accept="image/*,.jpg,.jpeg,.png">
+            <small>사진 업로드 후 OCR 결과를 확인하고 저장하세요.</small>
           </label>
 
           <section class="ocr-panel" id="ocrPanel" aria-live="polite">
@@ -219,7 +168,7 @@
               <summary>OCR 원문 텍스트 보기</summary>
               <label>
                 OCR 원문 텍스트
-                <textarea id="ocrRawText" name="ocrRawText" placeholder="OCR 분석 원문이 이곳에 표시됩니다. 필요 시 직접 확인하세요."></textarea>
+                <textarea id="ocrRawText" name="ocrRawText" placeholder="OCR 분석 원문이 이곳에 표시됩니다."></textarea>
               </label>
             </details>
 
@@ -238,77 +187,40 @@
                 <label>제조사<input type="text" name="ocrCompression_manufacturer"></label>
               </div>
             </div>
-
-            <div class="ocr-section concrete-preview-section">
-              <h4>콘크리트 타설현황표 추출값</h4>
-              <p class="preview-help">OCR 결과를 저장 전 확인/수정하세요. 빈 행은 저장되지 않습니다.</p>
-              <div class="ocr-table-wrap">
-                <table class="ocr-preview-table" id="concretePourPreviewTable">
-                  <thead>
-                    <tr>
-                      <th>No.</th>
-                      <th>타설일자</th>
-                      <th>규격</th>
-                      <th>타설위치</th>
-                      <th>물량</th>
-                      <th>제조사</th>
-                      <th>회차</th>
-                      <th>비고</th>
-                    </tr>
-                  </thead>
-                  <tbody id="concretePourPreviewBody">
-                    <tr><td colspan="8">콘크리트 타설현황표 사진 업로드 시 OCR 결과가 표시됩니다.</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
           </section>
 
-          <button class="save-button" type="submit">저장</button>
+          <button class="save-button" type="submit">압축강도 현황 저장</button>
         </form>
       </section>
     </section>
 
-    <section class="tab-view" id="tab-status">
+    <section class="tab-view" id="tab-kpi">
       <div class="section-head">
-        <p>RECENT STATUS</p>
-        <h2>최근 등록 현황</h2>
+        <p>QUALITY KPI</p>
+        <h2>품질관리 종합현황</h2>
       </div>
-      <div class="status-list" id="mobileStatusList"></div>
+      <div class="metric-grid" id="mobileKpiCards"></div>
     </section>
   </main>
 
+  <footer class="mobile-footer">
+    <strong>LOTTE E&amp;C</strong>
+    <span>품질은 미래다 · 기본과 원칙 준수 · 정직과 신뢰의 가치 실현</span>
+    <em>신림2재정비촉진구역 주택재개발정비사업 품질관리 종합현황</em>
+  </footer>
+
   <nav class="bottom-nav" aria-label="모바일 하단 내비게이션">
-    <button class="bottom-nav-button active" type="button" data-tab="dashboard">
-      <span>⌂</span>
-      홈
-    </button>
-    <button class="bottom-nav-button" type="button" data-tab="compression">
-      <span>▣</span>
-      압축강도
-    </button>
-    <button class="bottom-nav-button" type="button" data-tab="pour">
-      <span>▥</span>
-      타설현황
-    </button>
-    <button class="bottom-nav-button" type="button" data-tab="material">
-      <span>▤</span>
-      자재승인
-    </button>
-    <button class="bottom-nav-button" type="button" data-tab="photo">
-      <span>＋</span>
-      등록
-    </button>
-    <button class="bottom-nav-button" type="button" data-tab="status">
-      <span>≡</span>
-      현황
-    </button>
+    <button class="bottom-nav-button active" type="button" data-tab="dashboard"><span>⌂</span>홈</button>
+    <button class="bottom-nav-button" type="button" data-tab="pour"><span>▥</span>타설</button>
+    <button class="bottom-nav-button" type="button" data-tab="compression"><span>▣</span>강도</button>
+    <button class="bottom-nav-button" type="button" data-tab="photo"><span>＋</span>등록</button>
+    <button class="bottom-nav-button" type="button" data-tab="kpi"><span>▦</span>KPI</button>
   </nav>
 
   <div class="mobile-toast" id="mobileToast" role="status" aria-live="polite"></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/6.0.1/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="./config.js?v=20260604-excel-upload2"></script>
-  <script src="./mobile.js?v=20260604-excel-upload2"></script>
+  <script src="./config.js?v=20260604-cleanup1"></script>
+  <script src="./mobile.js?v=20260604-cleanup1"></script>
 </body>
 </html>
