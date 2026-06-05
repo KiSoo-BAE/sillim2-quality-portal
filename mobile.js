@@ -1,9 +1,10 @@
 const mobilePortalConfig = {
-  version: "20260604-concrete-pour3",
+  version: "20260604-edit-delete1",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
   storageKey: "sillim2MobileOcrTest4PhotoRegisterData",
   compressionStorageKey: "qualityPortal_compressionStrengthData",
   concretePourStorageKey: "qualityPortal_concretePourData",
+  materialApprovalStorageKey: "qualityPortal_materialApprovalData",
   futureSync: {
     source: "mobile.html",
     target: "Tesseract.js / Google Sheets / Apps Script / OCR API",
@@ -13,8 +14,11 @@ const mobilePortalConfig = {
 
 let compressionStrengthData = [];
 let concretePourData = [];
-const materialApprovalData = [];
+let materialApprovalData = [];
 let photoRegisterData = [];
+let editState = null;
+let lastDeletedEntry = null;
+let undoTimer = null;
 
 const mobileDashboardCards = [
   { no: "01", id: "compressive", title: "콘크리트 압축강도", icon: "cube" },
@@ -191,6 +195,34 @@ function writeConcretePourData(entries) {
   localStorage.setItem(mobilePortalConfig.concretePourStorageKey, JSON.stringify(concretePourData));
 }
 
+function normalizeMaterialApprovalRecord(record) {
+  return {
+    id: record.id || `material-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    materialName: String(record.materialName || record["자재명"] || record.title || "").trim(),
+    company: String(record.company || record.manufacturer || record["제조사"] || record["업체명"] || "").trim(),
+    trade: String(record.trade || record["공종"] || record["적용공종"] || "").trim(),
+    submitDate: String(record.submitDate || record["제출일"] || record["승인일"] || "").trim(),
+    expectedApprovalDate: String(record.expectedApprovalDate || record["승인예정일"] || "").trim(),
+    status: String(record.status || record["승인상태"] || "검토중").trim(),
+    note: String(record.note || record["비고"] || record["판정"] || "").trim(),
+    createdAt: record.createdAt || new Date().toISOString()
+  };
+}
+
+function readMaterialApprovalData() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(mobilePortalConfig.materialApprovalStorageKey) || "[]");
+    return Array.isArray(parsed) ? parsed.map(normalizeMaterialApprovalRecord) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeMaterialApprovalData(entries) {
+  materialApprovalData = entries.map(normalizeMaterialApprovalRecord);
+  localStorage.setItem(mobilePortalConfig.materialApprovalStorageKey, JSON.stringify(materialApprovalData));
+}
+
 async function fetchCompressionDataFromGoogleSheets() {
   if (!isGoogleSyncEnabled()) return null;
 
@@ -322,6 +354,19 @@ async function postConcretePourDataToGoogleSheets(records) {
   });
 
   if (!response.ok) throw new Error(`Google Sheets concretePour POST failed: ${response.status}`);
+  return { skipped: false };
+}
+
+async function postDataMutationToGoogleSheets(type, action, payload) {
+  if (!isGoogleSyncEnabled()) return { skipped: true };
+  const response = await fetch(googleScriptUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({ type, action, payload })
+  });
+  if (!response.ok) throw new Error(`Google Sheets ${type} ${action} failed: ${response.status}`);
   return { skipped: false };
 }
 
@@ -1306,6 +1351,7 @@ function renderCompressionList() {
         ${dataField("평균강도", item.averageStrength)}
         ${dataField("상태", item.resultStatus)}
       </div>
+      ${actionButtons("compression", item.id)}
     </article>
   `).join("");
 }
@@ -1333,6 +1379,7 @@ function renderMaterialList() {
         ${dataField("상태", item.status)}
         ${dataField("비고", item.note)}
       </div>
+      ${actionButtons("material", item.id)}
     </article>
   `).join("");
 }
@@ -1362,6 +1409,7 @@ function renderConcretePourList() {
         ${dataField("회차", item.batch)}
         ${dataField("비고", item.note)}
       </div>
+      ${actionButtons("concretePour", item.id)}
     </article>
   `).join("");
 }
@@ -1371,6 +1419,15 @@ function dataField(label, value) {
     <div class="data-field">
       <span>${label}</span>
       <strong>${escapeHtml(value || "-")}</strong>
+    </div>
+  `;
+}
+
+function actionButtons(type, id) {
+  return `
+    <div class="data-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+      <button type="button" data-edit-type="${type}" data-edit-id="${escapeHtml(id)}" style="min-height:38px;padding:0 12px;border:0;background:#1D4ED8;color:#fff;font-weight:900;border-radius:4px;">수정</button>
+      <button type="button" data-delete-type="${type}" data-delete-id="${escapeHtml(id)}" style="min-height:38px;padding:0 12px;border:0;background:#E60012;color:#fff;font-weight:900;border-radius:4px;">삭제</button>
     </div>
   `;
 }
@@ -1509,6 +1566,19 @@ function makeCompressionRecord(ocrData, formData) {
   };
 }
 
+function makeMaterialRecordFromForm(formData) {
+  return normalizeMaterialApprovalRecord({
+    id: editState?.type === "material" ? editState.id : `material-${Date.now()}`,
+    materialName: String(formData.get("title") || "").trim(),
+    company: String(formData.get("location") || "").trim(),
+    trade: String(formData.get("trade") || "").trim(),
+    submitDate: String(formData.get("date") || "").trim(),
+    status: String(formData.get("status") || "검토중").trim(),
+    note: String(formData.get("note") || "").trim(),
+    createdAt: new Date().toISOString()
+  });
+}
+
 function disableNativeValidation(form) {
   form.setAttribute("novalidate", "novalidate");
   form.querySelectorAll("[required]").forEach(field => field.removeAttribute("required"));
@@ -1525,6 +1595,107 @@ function setEntryType(type) {
   setOcrStatus(type === "concretePourTablePhoto"
     ? "콘크리트 타설현황표 사진 업로드 시 OCR 분석을 실행합니다."
     : "압축강도 보드판 사진 업로드 시 OCR 분석을 실행합니다.");
+}
+
+function setSaveMode(type, id) {
+  editState = type && id ? { type, id } : null;
+  const saveButton = document.querySelector(".save-button");
+  if (saveButton) saveButton.textContent = editState ? "수정 저장" : "저장";
+}
+
+function resetEditMode() {
+  setSaveMode(null, null);
+}
+
+function editCompressionRecord(id) {
+  const item = compressionStrengthData.find(record => record.id === id);
+  if (!item) return;
+  setEntryType("compressionTestPhoto");
+  setFormValue("ocrCompression_pouringArea", item.location);
+  setFormValue("ocrCompression_spec", item.spec);
+  setFormValue("ocrCompression_age", item.age);
+  setFormValue("ocrCompression_testType", item.testType);
+  setFormValue("ocrCompression_pouringDate", item.pourDate);
+  setFormValue("ocrCompression_testDate", item.testDate);
+  setFormValue("ocrCompression_averageStrength", item.averageStrength);
+  setFormValue("ocrCompression_manufacturer", item.manufacturer);
+  setFormValue("date", item.testDate || item.pourDate);
+  setFormValue("location", item.location);
+  setSaveMode("compression", id);
+  setTab("photo");
+  showToast("압축강도 데이터를 수정합니다.");
+}
+
+function editConcretePourRecord(id) {
+  const item = concretePourData.find(record => record.id === id);
+  if (!item) return;
+  setEntryType("concretePourTablePhoto");
+  renderConcretePourPreviewRows([item]);
+  setFormValue("date", item.pourDate);
+  setFormValue("location", item.location);
+  setSaveMode("concretePour", id);
+  setTab("photo");
+  showToast("콘크리트 타설현황 데이터를 수정합니다.");
+}
+
+function editMaterialRecord(id) {
+  const item = materialApprovalData.find(record => record.id === id);
+  if (!item) return;
+  setEntryType("approvalDocPhoto");
+  setFormValue("title", item.materialName);
+  setFormValue("location", item.company);
+  setFormValue("trade", item.trade);
+  setFormValue("date", item.submitDate);
+  setFormValue("status", item.status);
+  setFormValue("note", item.note);
+  setSaveMode("material", id);
+  setTab("photo");
+  showToast("자재공급원승인 데이터를 수정합니다.");
+}
+
+function deleteDataRecord(type, id) {
+  if (!confirm("정말 삭제하시겠습니까?")) return;
+  let deleted = null;
+
+  if (type === "compression") {
+    const rows = readCompressionStrengthData();
+    deleted = rows.find(item => item.id === id);
+    writeCompressionStrengthData(rows.filter(item => item.id !== id));
+    refreshCompressionViews();
+  }
+
+  if (type === "concretePour") {
+    const rows = readConcretePourData();
+    deleted = rows.find(item => item.id === id);
+    writeConcretePourData(rows.filter(item => item.id !== id));
+    refreshConcretePourViews();
+  }
+
+  if (type === "material") {
+    const rows = readMaterialApprovalData();
+    deleted = rows.find(item => item.id === id);
+    writeMaterialApprovalData(rows.filter(item => item.id !== id));
+    renderMaterialList();
+  }
+
+  if (!deleted) return;
+  lastDeletedEntry = { type, item: deleted };
+  postDataMutationToGoogleSheets(type, "delete", { id }).catch(error => console.warn("Google Sheets 삭제 연동 실패", error));
+  showUndoToast("삭제되었습니다.");
+}
+
+function handleListAction(event) {
+  const editButton = event.target.closest("[data-edit-type]");
+  const deleteButton = event.target.closest("[data-delete-type]");
+  if (editButton) {
+    const { editType, editId } = editButton.dataset;
+    if (editType === "compression") editCompressionRecord(editId);
+    if (editType === "concretePour") editConcretePourRecord(editId);
+    if (editType === "material") editMaterialRecord(editId);
+  }
+  if (deleteButton) {
+    deleteDataRecord(deleteButton.dataset.deleteType, deleteButton.dataset.deleteId);
+  }
 }
 
 function setTab(tab) {
@@ -1545,6 +1716,33 @@ function showToast(message) {
   setTimeout(() => toast.classList.remove("show"), 2600);
 }
 
+function showUndoToast(message) {
+  const toast = document.getElementById("mobileToast");
+  toast.innerHTML = `${escapeHtml(message)} <button type="button" id="undoDeleteButton" style="margin-left:10px;border:0;background:#fff;color:#E60012;font-weight:900;border-radius:4px;padding:6px 10px;">삭제 취소(Undo)</button>`;
+  toast.classList.add("show");
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => {
+    lastDeletedEntry = null;
+    toast.classList.remove("show");
+  }, 30000);
+  document.getElementById("undoDeleteButton")?.addEventListener("click", restoreLastDeletedEntry, { once: true });
+}
+
+function restoreLastDeletedEntry() {
+  if (!lastDeletedEntry) return;
+  const { type, item } = lastDeletedEntry;
+  if (type === "compression") writeCompressionStrengthData([item].concat(readCompressionStrengthData()));
+  if (type === "concretePour") writeConcretePourData([item].concat(readConcretePourData()));
+  if (type === "material") writeMaterialApprovalData([item].concat(readMaterialApprovalData()));
+  refreshCompressionViews();
+  refreshConcretePourViews();
+  renderMaterialList();
+  postDataMutationToGoogleSheets(type, "update", item).catch(error => console.warn("Google Sheets Undo 연동 실패", error));
+  lastDeletedEntry = null;
+  clearTimeout(undoTimer);
+  showToast("삭제를 취소했습니다.");
+}
+
 function setDefaultDate() {
   const dateInput = document.querySelector("input[name='date']");
   if (dateInput && !dateInput.value) {
@@ -1557,6 +1755,7 @@ function setupMobilePortal() {
   photoRegisterData = readPhotoRegisterData();
   compressionStrengthData = readCompressionStrengthData();
   concretePourData = readConcretePourData();
+  materialApprovalData = readMaterialApprovalData();
   renderDashboardCards();
   renderMetricCards("concretePourSummaryCards", getConcretePourSummaryCards());
   renderMetricCards("compressionSummaryCards", getCompressionSummaryCards());
@@ -1594,6 +1793,9 @@ function setupMobilePortal() {
 
   const mobileInputForm = document.getElementById("mobileInputForm");
   disableNativeValidation(mobileInputForm);
+  document.getElementById("compressionList")?.addEventListener("click", handleListAction);
+  document.getElementById("concretePourList")?.addEventListener("click", handleListAction);
+  document.getElementById("materialList")?.addEventListener("click", handleListAction);
 
   mobileInputForm.addEventListener("submit", async event => {
     event.preventDefault();
@@ -1612,16 +1814,24 @@ function setupMobilePortal() {
     const hasOcrData = hasOcrCompressionData(validation.ocrData);
     const concretePourRows = validation.concretePourRows || [];
     const hasConcretePourData = concretePourRows.length > 0;
+    const hasMaterialEdit = editState?.type === "material";
     let googleMessage = "";
     if (hasOcrData) {
-      const compressionRecord = makeCompressionRecord(validation.ocrData, formData);
+      const compressionRecord = {
+        ...makeCompressionRecord(validation.ocrData, formData),
+        id: editState?.type === "compression" ? editState.id : `compression-${Date.now()}`
+      };
       const compressionEntries = readCompressionStrengthData();
-      compressionEntries.unshift(compressionRecord);
-      writeCompressionStrengthData(compressionEntries);
+      const nextEntries = editState?.type === "compression"
+        ? compressionEntries.map(item => item.id === editState.id ? compressionRecord : item)
+        : [compressionRecord].concat(compressionEntries);
+      writeCompressionStrengthData(nextEntries);
       refreshCompressionViews();
 
       try {
-        const googleResult = await postCompressionDataToGoogleSheets(compressionRecord);
+        const googleResult = editState?.type === "compression"
+          ? await postDataMutationToGoogleSheets("compressionStrength", "update", compressionRecord)
+          : await postCompressionDataToGoogleSheets(compressionRecord);
         googleMessage = googleResult.skipped ? "압축강도 현황에 저장되었습니다" : "Google Sheets 저장 완료";
       } catch (error) {
         console.warn("Google Sheets 저장 실패 / 로컬 저장만 완료", error);
@@ -1633,18 +1843,37 @@ function setupMobilePortal() {
       const createdAt = new Date().toISOString();
       const concreteRecords = concretePourRows.map(row => normalizeConcretePourRecord({
         ...row,
-        id: row.id || `concrete-pour-${Date.now()}-${row.no || Math.random().toString(16).slice(2)}`,
+        id: editState?.type === "concretePour" ? editState.id : row.id || `concrete-pour-${Date.now()}-${row.no || Math.random().toString(16).slice(2)}`,
         createdAt
       }));
       const pourEntries = readConcretePourData();
-      writeConcretePourData(concreteRecords.concat(pourEntries));
+      const nextPourEntries = editState?.type === "concretePour"
+        ? pourEntries.map(item => item.id === editState.id ? concreteRecords[0] : item)
+        : concreteRecords.concat(pourEntries);
+      writeConcretePourData(nextPourEntries);
       refreshConcretePourViews();
 
       try {
-        const googleResult = await postConcretePourDataToGoogleSheets(concreteRecords);
+        const googleResult = editState?.type === "concretePour"
+          ? await postDataMutationToGoogleSheets("concretePour", "update", concreteRecords[0])
+          : await postConcretePourDataToGoogleSheets(concreteRecords);
         googleMessage = googleResult.skipped ? "콘크리트 타설현황에 저장되었습니다" : "Google Sheets 저장 완료";
       } catch (error) {
         console.warn("Google Sheets 타설현황 저장 실패 / 로컬 저장만 완료", error);
+        googleMessage = "Google Sheets 저장 실패 / 로컬 저장만 완료";
+      }
+    }
+
+    if (hasMaterialEdit) {
+      const materialRecord = makeMaterialRecordFromForm(formData);
+      const materialEntries = readMaterialApprovalData();
+      writeMaterialApprovalData(materialEntries.map(item => item.id === editState.id ? materialRecord : item));
+      renderMaterialList();
+      try {
+        const googleResult = await postDataMutationToGoogleSheets("materialApproval", "update", materialRecord);
+        googleMessage = googleResult.skipped ? "자재공급원승인 현황에 저장되었습니다" : "Google Sheets 저장 완료";
+      } catch (error) {
+        console.warn("Google Sheets 자재승인 저장 실패 / 로컬 저장만 완료", error);
         googleMessage = "Google Sheets 저장 실패 / 로컬 저장만 완료";
       }
     }
@@ -1654,15 +1883,20 @@ function setupMobilePortal() {
     latestOcrFile = null;
     if (ocrRetryButton) ocrRetryButton.disabled = true;
     clearOcrFields();
+    resetEditMode();
     setOcrStatus("압축강도 보드판 사진 업로드 시 OCR 분석을 실행합니다.");
     setDefaultDate();
-    setTab(hasConcretePourData ? "pour" : hasOcrData ? "compression" : "status");
-    showToast((hasOcrData || hasConcretePourData) ? googleMessage : "사진 등록 데이터가 임시 저장되었습니다.");
+    setTab(hasMaterialEdit ? "material" : hasConcretePourData ? "pour" : hasOcrData ? "compression" : "status");
+    showToast((hasOcrData || hasConcretePourData || hasMaterialEdit) ? googleMessage : "사진 등록 데이터가 임시 저장되었습니다.");
   });
 
   window.addEventListener("storage", event => {
     if (event.key === mobilePortalConfig.compressionStorageKey) refreshCompressionViews();
     if (event.key === mobilePortalConfig.concretePourStorageKey) refreshConcretePourViews();
+    if (event.key === mobilePortalConfig.materialApprovalStorageKey) {
+      materialApprovalData = readMaterialApprovalData();
+      renderMaterialList();
+    }
   });
 }
 
