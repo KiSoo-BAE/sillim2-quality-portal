@@ -1,9 +1,9 @@
 const qualityPortalData = {
   readyMix: {
-    title: "레미콘 타설현황",
+    title: "콘크리트 타설현황",
     eyebrow: "READY-MIX PLACEMENT STATUS",
-    description: "레미콘 타설 이력, 설계강도, 제조사, 타설량과 상태를 조회합니다.",
-    columns: ["타설일자", "타설부위", "설계강도", "제조사", "타설량", "상태"],
+    description: "콘크리트 타설일자, 규격, 타설위치, 물량과 제조사를 조회합니다.",
+    columns: ["No.", "타설일자", "규격", "타설위치", "물량", "제조사", "회차", "비고"],
     rows: []
   },
   materialArch: {
@@ -53,5 +53,8 @@ const qualityPortalData = {
 const qualityPortalStorageKeys = {
   // Same browser/device sync uses localStorage. Cross-device sync can later be
   // replaced with Google Sheets, Apps Script, or another backend API.
-  compressionStrength: "qualityPortal_compressionStrengthData"
+  compressionStrength: "qualityPortal_compressionStrengthData",
+  concretePour: "qualityPortal_concretePourData"
 };
+
+window.qualityPortalStorageKeys = qualityPortalStorageKeys;
