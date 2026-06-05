@@ -9,7 +9,7 @@ const pageOrder = [
 ];
 
 const menuItems = [
-  ["readyMix", "01", "레미콘 타설현황", "타설부위, 설계강도, 제조사, 타설량과 상태 조회"],
+  ["readyMix", "01", "콘크리트 타설현황", "타설일자, 규격, 타설위치, 물량과 제조사 조회"],
   ["materialArch", "02", "자재공급원승인(건축)", "건축 자재 규격, 승인상태와 판정 확인"],
   ["materialCivil", "03", "자재공급원승인(토목)", "토목 자재 공급원 승인 현황 조회"],
   ["materialLandscape", "04", "자재공급원승인(조경)", "조경 자재 공급원 승인 현황 조회"],
@@ -41,6 +41,8 @@ const badgeMap = {
 const pageNumbers = Object.fromEntries(menuItems.map(([key, number]) => [key, number]));
 const compressionStorageKey =
   window.qualityPortalStorageKeys?.compressionStrength || "qualityPortal_compressionStrengthData";
+const concretePourStorageKey =
+  window.qualityPortalStorageKeys?.concretePour || "qualityPortal_concretePourData";
 const googleScriptUrl = (window.GOOGLE_SCRIPT_URL || "").trim();
 
 function isGoogleSyncEnabled() {
@@ -53,6 +55,14 @@ function normalizeGoogleRows(payload) {
     : payload?.compressionStrength || payload?.compressionStrengthData || payload?.data || payload?.rows || [];
 
   return Array.isArray(rows) ? rows.map(normalizeCompressionRecord) : [];
+}
+
+function normalizeGoogleConcreteRows(payload) {
+  const rows = Array.isArray(payload)
+    ? payload
+    : payload?.concretePour || payload?.concretePourData || payload?.data || payload?.rows || [];
+
+  return Array.isArray(rows) ? rows.map(normalizeConcretePourRecord) : [];
 }
 
 function readCompressionStorageData() {
@@ -68,6 +78,34 @@ function writeCompressionStorageData(entries) {
   localStorage.setItem(compressionStorageKey, JSON.stringify(entries.map(normalizeCompressionRecord)));
 }
 
+function readConcretePourStorageData() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(concretePourStorageKey) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeConcretePourStorageData(entries) {
+  localStorage.setItem(concretePourStorageKey, JSON.stringify(entries.map(normalizeConcretePourRecord)));
+}
+
+function normalizeConcretePourRecord(record) {
+  return {
+    id: record.id || `concrete-pour-${Date.now()}`,
+    no: String(record.no || record["No."] || "").trim(),
+    pourDate: String(record.pourDate || record["타설일자"] || "").trim(),
+    spec: String(record.spec || record["규격"] || "").trim(),
+    location: String(record.location || record["타설위치"] || record.pouringLocation || "").trim(),
+    quantity: String(record.quantity || record["물량"] || "").trim(),
+    manufacturer: String(record.manufacturer || record["제조사"] || "").trim(),
+    batch: String(record.batch || record["회차"] || "").trim(),
+    note: String(record.note || record["비고"] || "").trim(),
+    createdAt: record.createdAt || ""
+  };
+}
+
 async function fetchCompressionDataFromGoogleSheets() {
   if (!isGoogleSyncEnabled()) return null;
 
@@ -81,6 +119,21 @@ async function fetchCompressionDataFromGoogleSheets() {
 
   if (!response.ok) throw new Error(`Google Sheets GET failed: ${response.status}`);
   return normalizeGoogleRows(await response.json());
+}
+
+async function fetchConcretePourDataFromGoogleSheets() {
+  if (!isGoogleSyncEnabled()) return null;
+
+  const url = new URL(googleScriptUrl);
+  url.searchParams.set("type", "concretePour");
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    cache: "no-store"
+  });
+
+  if (!response.ok) throw new Error(`Google Sheets concretePour GET failed: ${response.status}`);
+  return normalizeGoogleConcreteRows(await response.json());
 }
 
 function normalizeCompressionRecord(record) {
@@ -130,10 +183,32 @@ function mapCompressionRecordToRow(record) {
   };
 }
 
+function mapConcretePourRecordToRow(record) {
+  const item = normalizeConcretePourRecord(record);
+  return {
+    "No.": item.no,
+    "타설일자": item.pourDate,
+    "규격": item.spec,
+    "타설위치": item.location,
+    "물량": item.quantity,
+    "제조사": item.manufacturer,
+    "회차": item.batch,
+    "비고": item.note,
+    __source: "localStorage",
+    __id: item.id
+  };
+}
+
 function syncCompressionDataFromStorage() {
   if (!qualityPortalData.compressive) return;
   const baseRows = qualityPortalData.compressive.rows.filter(row => row.__source !== "localStorage");
   qualityPortalData.compressive.rows = baseRows.concat(readCompressionStorageData().map(mapCompressionRecordToRow));
+}
+
+function syncConcretePourDataFromStorage() {
+  if (!qualityPortalData.readyMix) return;
+  const baseRows = qualityPortalData.readyMix.rows.filter(row => row.__source !== "localStorage");
+  qualityPortalData.readyMix.rows = baseRows.concat(readConcretePourStorageData().map(mapConcretePourRecordToRow));
 }
 
 async function syncCompressionDataFromGoogleSheets() {
@@ -150,8 +225,23 @@ async function syncCompressionDataFromGoogleSheets() {
   }
 }
 
+async function syncConcretePourDataFromGoogleSheets() {
+  try {
+    const rows = await fetchConcretePourDataFromGoogleSheets();
+    if (!rows) return false;
+    writeConcretePourStorageData(rows);
+    refreshPortalViews();
+    return true;
+  } catch (error) {
+    console.warn("Google Sheets 타설현황 데이터를 불러오지 못해 localStorage 데이터를 사용합니다.", error);
+    syncConcretePourDataFromStorage();
+    return false;
+  }
+}
+
 function refreshPortalViews() {
   syncCompressionDataFromStorage();
+  syncConcretePourDataFromStorage();
   renderHomeKpis();
   renderMenus();
   renderStatusPages();
@@ -197,7 +287,7 @@ function countBy(rows, key) {
 
 function sumReadyMixVolume() {
   return qualityPortalData.readyMix.rows.reduce((sum, row) => {
-    return sum + Number(String(row["타설량"]).replace(/[^0-9.]/g, ""));
+    return sum + Number(String(row["물량"] || row["타설량"] || "").replace(/[^0-9.]/g, ""));
   }, 0);
 }
 
@@ -341,12 +431,13 @@ function renderTodayRows() {
 
 function getSummaryItems(pageKey, rows) {
   if (pageKey === "readyMix") {
-    const status = countBy(rows, "상태");
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const monthRows = rows.filter(row => String(row["타설일자"] || "").startsWith(currentMonth));
     return [
       ["총 타설건수", `${rows.length}건`],
       ["총 타설량", `${Math.round(sumReadyMixVolume())}m³`],
-      ["완료", `${status["완료"] || 0}건`],
-      ["진행/지연", `${(status["진행중"] || 0) + (status["지연"] || 0)}건`]
+      ["금월 타설건수", `${monthRows.length}건`],
+      ["금월 타설량", `${Math.round(monthRows.reduce((sum, row) => sum + Number(String(row["물량"] || "").replace(/[^0-9.]/g, "")), 0))}m³`]
     ];
   }
   if (["materialArch", "materialCivil", "materialLandscape"].includes(pageKey)) {
@@ -644,11 +735,13 @@ function setupEvents() {
   });
   window.addEventListener("storage", event => {
     if (event.key === compressionStorageKey) refreshPortalViews();
+    if (event.key === concretePourStorageKey) refreshPortalViews();
   });
 }
 
 function init() {
   syncCompressionDataFromStorage();
+  syncConcretePourDataFromStorage();
   renderNavIcons();
   renderHomeKpis();
   renderMenus();
@@ -664,6 +757,7 @@ function init() {
   window.showQualityPortalView = showView;
   window.__qualityPortalReady = true;
   syncCompressionDataFromGoogleSheets();
+  syncConcretePourDataFromGoogleSheets();
 }
 
 document.addEventListener("DOMContentLoaded", init);
