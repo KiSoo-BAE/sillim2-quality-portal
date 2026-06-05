@@ -6,27 +6,6 @@ const qualityPortalData = {
     columns: ["No.", "타설일자", "규격", "타설위치", "물량", "제조사", "회차", "비고"],
     rows: []
   },
-  materialArch: {
-    title: "자재공급원승인(건축)",
-    eyebrow: "ARCHITECTURE MATERIAL APPROVAL",
-    description: "건축 자재 공급원 승인 상태, 규격과 판정을 조회합니다.",
-    columns: ["자재명", "규격", "제조사", "승인일", "적용공종", "승인상태", "판정"],
-    rows: []
-  },
-  materialCivil: {
-    title: "자재공급원승인(토목)",
-    eyebrow: "CIVIL MATERIAL APPROVAL",
-    description: "토목 자재 공급원 승인, 성적서 제출 여부와 상태를 조회합니다.",
-    columns: ["자재명", "규격", "제조사", "승인일", "적용공종", "승인상태", "판정"],
-    rows: []
-  },
-  materialLandscape: {
-    title: "자재공급원승인(조경)",
-    eyebrow: "LANDSCAPE MATERIAL APPROVAL",
-    description: "조경 자재 공급원 승인과 샘플 확인 현황을 조회합니다.",
-    columns: ["자재명", "규격", "제조사", "승인일", "적용공종", "승인상태", "판정"],
-    rows: []
-  },
   compressive: {
     title: "콘크리트 압축강도",
     eyebrow: "CONCRETE COMPRESSIVE STRENGTH",
