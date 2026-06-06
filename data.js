@@ -10,21 +10,21 @@ const qualityPortalData = {
     title: "자재승인(건축)",
     eyebrow: "ARCHITECTURE MATERIAL APPROVAL",
     description: "건축 자재 승인 상태, 규격과 판정을 조회합니다.",
-    columns: ["자재명", "규격", "제조사", "승인일", "적용공종", "승인상태", "판정"],
+    columns: ["No.", "자재명", "업체명", "공종", "제출일", "승인일", "상태", "비고"],
     rows: []
   },
   materialCivil: {
     title: "자재승인(토목)",
     eyebrow: "CIVIL MATERIAL APPROVAL",
     description: "토목 자재 승인, 성적서 제출 여부와 상태를 조회합니다.",
-    columns: ["자재명", "규격", "제조사", "승인일", "적용공종", "승인상태", "판정"],
+    columns: ["No.", "자재명", "업체명", "공종", "제출일", "승인일", "상태", "비고"],
     rows: []
   },
   materialLandscape: {
     title: "자재승인(조경)",
     eyebrow: "LANDSCAPE MATERIAL APPROVAL",
     description: "조경 자재 승인과 샘플 확인 현황을 조회합니다.",
-    columns: ["자재명", "규격", "제조사", "승인일", "적용공종", "승인상태", "판정"],
+    columns: ["No.", "자재명", "업체명", "공종", "제출일", "승인일", "상태", "비고"],
     rows: []
   },
   compressive: {
@@ -54,7 +54,10 @@ const qualityPortalStorageKeys = {
   // Same browser/device sync uses localStorage. Cross-device sync can later be
   // replaced with Google Sheets, Apps Script, or another backend API.
   compressionStrength: "qualityPortal_compressionStrengthData",
-  concretePour: "qualityPortal_concretePourData"
+  concretePour: "qualityPortal_concretePourData",
+  materialApprovalArchitecture: "qualityPortal_materialApproval_architecture",
+  materialApprovalCivil: "qualityPortal_materialApproval_civil",
+  materialApprovalLandscape: "qualityPortal_materialApproval_landscape"
 };
 
 window.qualityPortalStorageKeys = qualityPortalStorageKeys;
