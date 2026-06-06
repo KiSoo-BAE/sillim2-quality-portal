@@ -43,6 +43,16 @@ const compressionStorageKey =
   window.qualityPortalStorageKeys?.compressionStrength || "qualityPortal_compressionStrengthData";
 const concretePourStorageKey =
   window.qualityPortalStorageKeys?.concretePour || "qualityPortal_concretePourData";
+const materialStorageKeys = {
+  materialArch: window.qualityPortalStorageKeys?.materialApprovalArchitecture || "qualityPortal_materialApproval_architecture",
+  materialCivil: window.qualityPortalStorageKeys?.materialApprovalCivil || "qualityPortal_materialApproval_civil",
+  materialLandscape: window.qualityPortalStorageKeys?.materialApprovalLandscape || "qualityPortal_materialApproval_landscape"
+};
+const materialPostTypes = {
+  materialArch: "materialApprovalArchitecture",
+  materialCivil: "materialApprovalCivil",
+  materialLandscape: "materialApprovalLandscape"
+};
 const googleScriptUrl = (window.GOOGLE_SCRIPT_URL || "").trim();
 
 function isGoogleSyncEnabled() {
@@ -89,6 +99,42 @@ function readConcretePourStorageData() {
 
 function writeConcretePourStorageData(entries) {
   localStorage.setItem(concretePourStorageKey, JSON.stringify(entries.map(normalizeConcretePourRecord)));
+}
+
+function getMaterialCategory(pageKey) {
+  return pageKey === "materialArch" ? "건축" : pageKey === "materialCivil" ? "토목" : "조경";
+}
+
+function normalizeMaterialApprovalRecord(record, category = "") {
+  return {
+    id: record.id || `material-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    category: String(record.category || category || "").trim(),
+    no: String(record.no || record["No."] || "").trim(),
+    materialName: String(record.materialName || record["자재명"] || record.title || "").trim(),
+    companyName: String(record.companyName || record.company || record.manufacturer || record["제조사"] || record["업체명"] || "").trim(),
+    trade: String(record.trade || record["공종"] || record["적용공종"] || "").trim(),
+    submitDate: String(record.submitDate || record["제출일"] || record["승인요청일"] || "").trim(),
+    approvalDate: String(record.approvalDate || record["승인일"] || "").trim(),
+    status: String(record.status || record["승인상태"] || record["상태"] || "").trim(),
+    note: String(record.note || record["비고"] || record["판정"] || "").trim(),
+    createdAt: record.createdAt || ""
+  };
+}
+
+function readMaterialApprovalStorageData(pageKey) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(materialStorageKeys[pageKey]) || "[]");
+    return Array.isArray(parsed) ? parsed.map(row => normalizeMaterialApprovalRecord(row, getMaterialCategory(pageKey))) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeMaterialApprovalStorageData(pageKey, entries) {
+  localStorage.setItem(
+    materialStorageKeys[pageKey],
+    JSON.stringify(entries.map(row => normalizeMaterialApprovalRecord(row, getMaterialCategory(pageKey))))
+  );
 }
 
 function normalizeConcretePourRecord(record) {
@@ -199,6 +245,22 @@ function mapConcretePourRecordToRow(record) {
   };
 }
 
+function mapMaterialApprovalRecordToRow(record, pageKey) {
+  const item = normalizeMaterialApprovalRecord(record, getMaterialCategory(pageKey));
+  return {
+    "No.": item.no,
+    "자재명": item.materialName,
+    "업체명": item.companyName,
+    "공종": item.trade,
+    "제출일": item.submitDate,
+    "승인일": item.approvalDate,
+    "상태": item.status,
+    "비고": item.note,
+    __source: "localStorage",
+    __id: item.id
+  };
+}
+
 function syncCompressionDataFromStorage() {
   if (!qualityPortalData.compressive) return;
   const baseRows = qualityPortalData.compressive.rows.filter(row => row.__source !== "localStorage");
@@ -209,6 +271,16 @@ function syncConcretePourDataFromStorage() {
   if (!qualityPortalData.readyMix) return;
   const baseRows = qualityPortalData.readyMix.rows.filter(row => row.__source !== "localStorage");
   qualityPortalData.readyMix.rows = baseRows.concat(readConcretePourStorageData().map(mapConcretePourRecordToRow));
+}
+
+function syncMaterialApprovalDataFromStorage() {
+  Object.keys(materialStorageKeys).forEach(pageKey => {
+    if (!qualityPortalData[pageKey]) return;
+    const baseRows = qualityPortalData[pageKey].rows.filter(row => row.__source !== "localStorage");
+    qualityPortalData[pageKey].rows = baseRows.concat(
+      readMaterialApprovalStorageData(pageKey).map(row => mapMaterialApprovalRecordToRow(row, pageKey))
+    );
+  });
 }
 
 async function syncCompressionDataFromGoogleSheets() {
@@ -252,9 +324,14 @@ async function postDataMutationToGoogleSheets(type, action, payload) {
   return { skipped: false };
 }
 
+function getGooglePostType(type) {
+  return materialPostTypes[type] || type;
+}
+
 function refreshPortalViews() {
   syncCompressionDataFromStorage();
   syncConcretePourDataFromStorage();
+  syncMaterialApprovalDataFromStorage();
   renderHomeKpis();
   renderMenus();
   renderStatusPages();
@@ -326,11 +403,10 @@ function rate(numerator, denominator) {
 
 function getMaterialKpi(pageKey) {
   const rows = qualityPortalData[pageKey].rows;
-  const decisionRows = rows.filter(row => isDecisionValue(row["판정"]));
   return {
-    approvalCount: rows.filter(row => isApproved(row["승인상태"])).length,
-    pendingCount: rows.filter(row => isPending(row["승인상태"]) || !row["승인상태"]).length,
-    fitRate: rate(decisionRows.filter(row => isPass(row["판정"])).length, decisionRows.length)
+    approvalCount: rows.filter(row => isApproved(row["상태"] || row["승인상태"])).length,
+    pendingCount: rows.filter(row => isPending(row["상태"] || row["승인상태"]) || !(row["상태"] || row["승인상태"])).length,
+    fitRate: rate(rows.filter(row => isPass(row["상태"] || row["승인상태"])).length, rows.length)
   };
 }
 
@@ -532,7 +608,7 @@ function renderStatusPages() {
             ${statusOptions.map(option => `<option value="${option}">${option}</option>`).join("")}
           </select>
         </label>
-        ${["readyMix", "compressive"].includes(pageKey) ? `<button type="button" data-pc-clear-page="${pageKey}" style="min-height:38px;padding:0 12px;border:0;background:#E60012;color:#fff;font-weight:900;border-radius:4px;">전부삭제</button>` : ""}
+        ${["readyMix", "compressive", "materialArch", "materialCivil", "materialLandscape"].includes(pageKey) ? `<button type="button" data-pc-clear-page="${pageKey}" style="min-height:38px;padding:0 12px;border:0;background:#E60012;color:#fff;font-weight:900;border-radius:4px;">전부삭제</button>` : ""}
       </div>
       <div class="table-wrap">
         <table class="data-table">
@@ -567,7 +643,13 @@ function updateStatusTable(pageKey) {
 
 function statusActionButtons(pageKey, row) {
   if (!row.__id || row.__source !== "localStorage") return "-";
-  const type = pageKey === "compressive" ? "compression" : pageKey === "readyMix" ? "concretePour" : "";
+  const type = pageKey === "compressive"
+    ? "compression"
+    : pageKey === "readyMix"
+      ? "concretePour"
+      : ["materialArch", "materialCivil", "materialLandscape"].includes(pageKey)
+        ? pageKey
+        : "";
   if (!type) return "-";
   return `
     <div style="display:flex;gap:6px;justify-content:center;">
@@ -704,9 +786,16 @@ function drawDonutChart(canvasId, percent) {
 
 function drawDashboardCharts() {
   const kpi = getKpiSummary();
+  const materialRows = ["materialArch", "materialCivil", "materialLandscape"].flatMap(key => qualityPortalData[key]?.rows || []);
+  const approvalStatus = countBy(materialRows, "상태");
   drawBarChart("monthlyChart", ["1월", "2월", "3월", "4월", "5월", "6월"], [0, 0, 0, 0, 0, 0], "#102A54");
   drawDonutChart("passRateChart", kpi.requestedFitRate);
-  drawBarChart("approvalChart", ["승인", "진행", "지연", "보완"], [0, 0, 0, 0], "#E60012");
+  drawBarChart("approvalChart", ["승인", "진행", "지연", "보완"], [
+    (approvalStatus["승인"] || 0) + (approvalStatus["승인완료"] || 0) + (approvalStatus["완료"] || 0),
+    (approvalStatus["진행중"] || 0) + (approvalStatus["검토중"] || 0) + (approvalStatus["대기"] || 0),
+    approvalStatus["지연"] || 0,
+    (approvalStatus["보완"] || 0) + (approvalStatus["보완요청"] || 0)
+  ], "#E60012");
 }
 
 function showView(id) {
@@ -745,7 +834,7 @@ function replaceStorageRecord(type, id, updater) {
   config.write(next);
   refreshPortalViews();
   const updated = next.find(item => item.id === id);
-  postDataMutationToGoogleSheets(type, "update", updated).catch(error => console.warn("Google Sheets 수정 연동 실패", error));
+  postDataMutationToGoogleSheets(getGooglePostType(type), "update", updated).catch(error => console.warn("Google Sheets 수정 연동 실패", error));
 }
 
 function removeStorageRecord(type, id) {
@@ -757,7 +846,7 @@ function removeStorageRecord(type, id) {
   config.write(rows.filter(item => item.id !== id));
   lastDeletedPcEntry = { type, item: deleted };
   refreshPortalViews();
-  postDataMutationToGoogleSheets(type, "delete", { id }).catch(error => console.warn("Google Sheets 삭제 연동 실패", error));
+  postDataMutationToGoogleSheets(getGooglePostType(type), "delete", { id }).catch(error => console.warn("Google Sheets 삭제 연동 실패", error));
   showPcUndoToast("삭제되었습니다.");
 }
 
@@ -767,7 +856,7 @@ function restorePcDeletedEntry() {
   if (!config) return;
   const items = lastDeletedPcEntry.items || [lastDeletedPcEntry.item];
   config.write(items.concat(config.read()));
-  postDataMutationToGoogleSheets(lastDeletedPcEntry.type, "update", items).catch(error => console.warn("Google Sheets Undo 연동 실패", error));
+  postDataMutationToGoogleSheets(getGooglePostType(lastDeletedPcEntry.type), "update", items).catch(error => console.warn("Google Sheets Undo 연동 실패", error));
   lastDeletedPcEntry = null;
   clearTimeout(pcUndoTimer);
   refreshPortalViews();
@@ -776,15 +865,16 @@ function restorePcDeletedEntry() {
 
 function clearPcPageData(pageKey) {
   if (!confirm("정말 전체 데이터를 삭제하시겠습니까?")) return;
-  const type = pageKey === "compressive" ? "compression" : "concretePour";
+  const type = pageKey === "compressive" ? "compression" : pageKey === "readyMix" ? "concretePour" : pageKey;
   const config = getStorageConfig(type);
   const rows = config.read().map(config.normalize);
   if (!rows.length) return showToast("삭제할 데이터가 없습니다.");
   if (type === "compression") localStorage.removeItem(compressionStorageKey);
   if (type === "concretePour") localStorage.removeItem(concretePourStorageKey);
+  if (materialStorageKeys[type]) localStorage.removeItem(materialStorageKeys[type]);
   lastDeletedPcEntry = { type, items: rows };
   refreshPortalViews();
-  postDataMutationToGoogleSheets(type, "delete", { all: true }).catch(error => console.warn("Google Sheets 전체삭제 연동 실패", error));
+  postDataMutationToGoogleSheets(getGooglePostType(type), "delete", { all: true }).catch(error => console.warn("Google Sheets 전체삭제 연동 실패", error));
   showPcUndoToast("전체 데이터가 삭제되었습니다.");
 }
 
@@ -798,6 +888,11 @@ function getStorageConfig(type) {
     read: readConcretePourStorageData,
     write: writeConcretePourStorageData,
     normalize: normalizeConcretePourRecord
+  };
+  if (materialStorageKeys[type]) return {
+    read: () => readMaterialApprovalStorageData(type),
+    write: entries => writeMaterialApprovalStorageData(type, entries),
+    normalize: row => normalizeMaterialApprovalRecord(row, getMaterialCategory(type))
   };
   return null;
 }
@@ -866,12 +961,14 @@ function setupEvents() {
   window.addEventListener("storage", event => {
     if (event.key === compressionStorageKey) refreshPortalViews();
     if (event.key === concretePourStorageKey) refreshPortalViews();
+    if (Object.values(materialStorageKeys).includes(event.key)) refreshPortalViews();
   });
 }
 
 function init() {
   syncCompressionDataFromStorage();
   syncConcretePourDataFromStorage();
+  syncMaterialApprovalDataFromStorage();
   renderNavIcons();
   renderHomeKpis();
   renderMenus();
