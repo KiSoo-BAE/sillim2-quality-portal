@@ -1,9 +1,14 @@
 const mobilePortalConfig = {
-  version: "20260604-cleanup3",
+  version: "20260604-material-approval1",
   projectName: "신림2재정비촉진구역 주택재개발정비사업",
   storageKey: "sillim2MobileOcrTest4PhotoRegisterData",
   compressionStorageKey: "qualityPortal_compressionStrengthData",
   concretePourStorageKey: "qualityPortal_concretePourData",
+  materialStorageKeys: {
+    materialArch: "qualityPortal_materialApproval_architecture",
+    materialCivil: "qualityPortal_materialApproval_civil",
+    materialLandscape: "qualityPortal_materialApproval_landscape"
+  },
   futureSync: {
     source: "mobile.html",
     target: "Tesseract.js / Google Sheets / Apps Script / OCR API",
@@ -13,11 +18,27 @@ const mobilePortalConfig = {
 
 let compressionStrengthData = [];
 let concretePourData = [];
+let materialApprovalData = {
+  materialArch: [],
+  materialCivil: [],
+  materialLandscape: []
+};
 let photoRegisterData = [];
 let editState = null;
 let lastDeletedEntry = null;
 let undoTimer = null;
 let pendingExcelPourRows = [];
+let pendingMaterialApprovalRows = {
+  materialArch: [],
+  materialCivil: [],
+  materialLandscape: []
+};
+
+const materialPageConfig = {
+  materialArch: { category: "건축", sheetNames: ["건축"], postType: "materialApprovalArchitecture" },
+  materialCivil: { category: "토목", sheetNames: ["토목"], postType: "materialApprovalCivil" },
+  materialLandscape: { category: "조경", sheetNames: ["조경"], postType: "materialApprovalLandscape" }
+};
 
 const mobileDashboardCards = [
   { no: "01", id: "readyMix", title: "콘크리트 타설현황", icon: "truck" },
@@ -239,6 +260,120 @@ function writeConcretePourData(entries) {
   localStorage.setItem(mobilePortalConfig.concretePourStorageKey, JSON.stringify(concretePourData));
 }
 
+function normalizeMaterialApprovalRecord(record, pageKey = "") {
+  const category = materialPageConfig[pageKey]?.category || record.category || "";
+  return {
+    id: record.id || `material-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    category: String(record.category || category).trim(),
+    no: String(record.no || record["No."] || "").trim(),
+    materialName: String(record.materialName || record["자재명"] || record.title || "").trim(),
+    companyName: String(record.companyName || record.company || record.manufacturer || record["제조사"] || record["업체명"] || "").trim(),
+    trade: String(record.trade || record["공종"] || record["적용공종"] || "").trim(),
+    submitDate: String(record.submitDate || record["제출일"] || record["승인요청일"] || "").trim(),
+    approvalDate: String(record.approvalDate || record["승인일"] || "").trim(),
+    status: String(record.status || record["승인상태"] || record["상태"] || "").trim(),
+    note: String(record.note || record["비고"] || record["판정"] || "").trim(),
+    createdAt: record.createdAt || new Date().toISOString()
+  };
+}
+
+function readMaterialApprovalData(pageKey) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(mobilePortalConfig.materialStorageKeys[pageKey]) || "[]");
+    return Array.isArray(parsed) ? parsed.map(row => normalizeMaterialApprovalRecord(row, pageKey)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeMaterialApprovalData(pageKey, entries) {
+  materialApprovalData[pageKey] = entries.map(row => normalizeMaterialApprovalRecord(row, pageKey));
+  localStorage.setItem(mobilePortalConfig.materialStorageKeys[pageKey], JSON.stringify(materialApprovalData[pageKey]));
+}
+
+function makeMaterialDuplicateKey(record) {
+  const item = normalizeMaterialApprovalRecord(record);
+  return [
+    item.category,
+    item.materialName,
+    item.companyName,
+    item.trade,
+    item.submitDate,
+    item.approvalDate
+  ].map(value => String(value || "").replace(/\s+/g, " ").trim()).join("|");
+}
+
+function findMaterialSheet(workbook, pageKey) {
+  const names = materialPageConfig[pageKey].sheetNames;
+  return names.map(name => workbook.Sheets[name] ? name : "")
+    .find(Boolean)
+    || workbook.SheetNames.find(name => names.some(target => name.includes(target)))
+    || workbook.SheetNames[0];
+}
+
+function normalizeHeaderText(value) {
+  return normalizeExcelCell(value).replace(/\s+/g, "").replace(/[().·ㆍ/\\-]/g, "").toLowerCase();
+}
+
+function findColumnIndex(headers, aliases) {
+  const normalizedAliases = aliases.map(normalizeHeaderText);
+  return headers.findIndex(header => normalizedAliases.some(alias => normalizeHeaderText(header).includes(alias)));
+}
+
+function findMaterialHeaderRow(rows) {
+  return rows.findIndex(row => {
+    const text = row.map(normalizeHeaderText).join("|");
+    return /자재|품명|공종|업체|제조|승인|제출/.test(text)
+      && row.filter(value => normalizeExcelCell(value)).length >= 4;
+  });
+}
+
+function parseMaterialApprovalRowsFromSheet(workbook, pageKey) {
+  const sheetName = findMaterialSheet(workbook, pageKey);
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) return [];
+  const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" });
+  const headerIndex = Math.max(0, findMaterialHeaderRow(rows));
+  const headers = rows[headerIndex] || [];
+  const columnMap = {
+    no: findColumnIndex(headers, ["no", "번호", "순번"]),
+    materialName: findColumnIndex(headers, ["자재명", "품명", "자재", "품목"]),
+    companyName: findColumnIndex(headers, ["업체명", "제조사", "공급업체", "업체", "회사"]),
+    trade: findColumnIndex(headers, ["공종", "적용공종", "공사종류"]),
+    submitDate: findColumnIndex(headers, ["제출일", "승인요청일", "신청일", "접수일"]),
+    approvalDate: findColumnIndex(headers, ["승인일", "승인일자", "완료일"]),
+    status: findColumnIndex(headers, ["승인상태", "상태", "진행상태"]),
+    note: findColumnIndex(headers, ["비고", "판정", "특이사항", "메모"])
+  };
+  const fallbackIndexes = {
+    no: 0,
+    materialName: 1,
+    companyName: 2,
+    trade: 3,
+    submitDate: 4,
+    approvalDate: 5,
+    status: 6,
+    note: 7
+  };
+  Object.keys(columnMap).forEach(key => {
+    if (columnMap[key] < 0) columnMap[key] = fallbackIndexes[key];
+  });
+
+  return rows.slice(headerIndex + 1).map((row, index) => normalizeMaterialApprovalRecord({
+    id: `material-excel-${pageKey}-${Date.now()}-${index}`,
+    category: materialPageConfig[pageKey].category,
+    no: normalizeExcelCell(row[columnMap.no]),
+    materialName: normalizeExcelCell(row[columnMap.materialName]),
+    companyName: normalizeExcelCell(row[columnMap.companyName]),
+    trade: normalizeExcelCell(row[columnMap.trade]),
+    submitDate: excelDateToIso(row[columnMap.submitDate]),
+    approvalDate: excelDateToIso(row[columnMap.approvalDate]),
+    status: normalizeExcelCell(row[columnMap.status]),
+    note: normalizeExcelCell(row[columnMap.note]),
+    createdAt: new Date().toISOString()
+  }, pageKey)).filter(row => row.materialName && row.companyName);
+}
+
 async function fetchCompressionDataFromGoogleSheets() {
   if (!isGoogleSyncEnabled()) return null;
 
@@ -373,6 +508,24 @@ async function postConcretePourDataToGoogleSheets(records) {
   return { skipped: false };
 }
 
+async function postMaterialApprovalDataToGoogleSheets(pageKey, records) {
+  if (!isGoogleSyncEnabled()) return { skipped: true };
+
+  const response = await fetch(googleScriptUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      type: materialPageConfig[pageKey].postType,
+      rows: records.map(row => normalizeMaterialApprovalRecord(row, pageKey))
+    })
+  });
+
+  if (!response.ok) throw new Error(`Google Sheets material approval POST failed: ${response.status}`);
+  return { skipped: false };
+}
+
 async function postDataMutationToGoogleSheets(type, action, payload) {
   if (!isGoogleSyncEnabled()) return { skipped: true };
   const response = await fetch(googleScriptUrl, {
@@ -456,6 +609,29 @@ function refreshConcretePourViews() {
   renderMetricCards("concretePourSummaryCards", getConcretePourSummaryCards());
   renderMetricCards("mobileKpiCards", getMobileKpiCards());
   renderConcretePourList();
+}
+
+function getMaterialSummaryCards(pageKey) {
+  const rows = materialApprovalData[pageKey] || [];
+  const approved = rows.filter(row => ["승인", "승인완료", "완료"].includes(row.status)).length;
+  const pending = rows.filter(row => !row.status || ["대기", "검토중", "진행중", "보완", "보완요청"].includes(row.status)).length;
+  return [
+    { title: "등록 자재", value: rows.length, unit: "건", foot: `${materialPageConfig[pageKey].category} 자재승인 누계` },
+    { title: "승인건수", value: approved, unit: "건", foot: "승인완료 기준" },
+    { title: "승인대기", value: pending, unit: "건", foot: "대기·검토·보완 기준", warning: pending > 0 }
+  ];
+}
+
+function refreshMaterialApprovalViews(pageKey) {
+  materialApprovalData[pageKey] = readMaterialApprovalData(pageKey);
+  renderDashboardCards();
+  renderMetricCards(`${pageKey}SummaryCards`, getMaterialSummaryCards(pageKey));
+  renderMetricCards("mobileKpiCards", getMobileKpiCards());
+  renderMaterialApprovalList(pageKey);
+}
+
+function refreshAllMaterialApprovalViews() {
+  Object.keys(materialPageConfig).forEach(refreshMaterialApprovalViews);
 }
 
 function setOcrStatus(message, state = "") {
@@ -1008,6 +1184,47 @@ function getExcelPourPreviewRows() {
   }).filter(row => !isEmptyConcretePourRow(row));
 }
 
+function renderMaterialApprovalPreviewRows(pageKey, rows = []) {
+  const target = document.getElementById(`${pageKey}PreviewBody`);
+  if (!target) return;
+  pendingMaterialApprovalRows[pageKey] = rows.map(row => normalizeMaterialApprovalRecord(row, pageKey));
+  if (!pendingMaterialApprovalRows[pageKey].length) {
+    target.innerHTML = `<tr><td colspan="8">엑셀 업로드 후 저장 전 미리보기가 표시됩니다.</td></tr>`;
+    return;
+  }
+  target.innerHTML = pendingMaterialApprovalRows[pageKey].map(row => `
+    <tr>
+      <td><input name="${pageKey}_no" value="${escapeHtml(row.no)}"></td>
+      <td><input name="${pageKey}_materialName" value="${escapeHtml(row.materialName)}"></td>
+      <td><input name="${pageKey}_companyName" value="${escapeHtml(row.companyName)}"></td>
+      <td><input name="${pageKey}_trade" value="${escapeHtml(row.trade)}"></td>
+      <td><input name="${pageKey}_submitDate" value="${escapeHtml(row.submitDate)}"></td>
+      <td><input name="${pageKey}_approvalDate" value="${escapeHtml(row.approvalDate)}"></td>
+      <td><input name="${pageKey}_status" value="${escapeHtml(row.status)}"></td>
+      <td><input name="${pageKey}_note" value="${escapeHtml(row.note)}"></td>
+    </tr>
+  `).join("");
+}
+
+function getMaterialApprovalPreviewRows(pageKey) {
+  const body = document.getElementById(`${pageKey}PreviewBody`);
+  if (!body) return [];
+  return [...body.querySelectorAll("tr")].map(row => {
+    const get = name => row.querySelector(`[name="${pageKey}_${name}"]`)?.value.trim() || "";
+    return normalizeMaterialApprovalRecord({
+      category: materialPageConfig[pageKey].category,
+      no: get("no"),
+      materialName: get("materialName"),
+      companyName: get("companyName"),
+      trade: get("trade"),
+      submitDate: get("submitDate"),
+      approvalDate: get("approvalDate"),
+      status: get("status"),
+      note: get("note")
+    }, pageKey);
+  }).filter(row => row.materialName && row.companyName);
+}
+
 function updateOcrConfidenceStatus(result) {
   const values = Object.values(result?.compression || {});
   const filledCount = values.filter(Boolean).length;
@@ -1363,10 +1580,19 @@ function renderDashboardCards() {
         value: photoCount
       };
     }
-    if (card.id === "dashboard") {
+    if (materialPageConfig[card.id]) {
+      const rows = materialApprovalData[card.id] || [];
+      const approved = rows.filter(row => ["승인", "승인완료", "완료"].includes(row.status)).length;
       return {
-        note: `타설 ${concretePourData.length}건 · 압축강도 ${compressionCounts.total}건`,
-        value: concretePourData.length + compressionCounts.total
+        note: rows.length ? `승인 ${approved}건 · 등록 ${rows.length}건` : "등록된 데이터 없음",
+        value: rows.length
+      };
+    }
+    if (card.id === "dashboard") {
+      const materialCount = Object.keys(materialPageConfig).reduce((sum, key) => sum + (materialApprovalData[key]?.length || 0), 0);
+      return {
+        note: `타설 ${concretePourData.length}건 · 자재승인 ${materialCount}건 · 압축강도 ${compressionCounts.total}건`,
+        value: concretePourData.length + materialCount + compressionCounts.total
       };
     }
     return { note: "등록된 데이터 없음", value: 0 };
@@ -1402,8 +1628,10 @@ function renderMetricCards(targetId, cards) {
 function getMobileKpiCards() {
   const compressionCounts = countCompressionResults();
   const totalQuantity = concretePourData.reduce((sum, item) => sum + parseQuantity(item.quantity), 0);
+  const materialCount = Object.keys(materialPageConfig).reduce((sum, key) => sum + (materialApprovalData[key]?.length || 0), 0);
   return [
     { title: "콘크리트 타설건수", value: concretePourData.length, unit: "건", foot: `총 타설량 ${Math.round(totalQuantity)}m³` },
+    { title: "자재승인 건수", value: materialCount, unit: "건", foot: "건축·토목·조경 누계" },
     { title: "압축강도 시험건수", value: compressionCounts.total, unit: "건", foot: `결과등록 ${compressionCounts.resultRegistered}건` },
     { title: "해체강도", value: compressionCounts.formRemoval, unit: "건", foot: "재령 1일 기준" },
     { title: "28일 강도", value: compressionCounts.day28, unit: "건", foot: "재령 28일 기준" },
@@ -1467,6 +1695,37 @@ function renderConcretePourList() {
         ${dataField("비고", item.note)}
       </div>
       ${actionButtons("concretePour", item.id)}
+    </article>
+  `).join("");
+}
+
+function renderMaterialApprovalList(pageKey) {
+  const target = document.getElementById(`${pageKey}List`);
+  if (!target) return;
+  const rows = materialApprovalData[pageKey] || [];
+  if (!rows.length) {
+    target.innerHTML = `
+      <article class="data-empty">
+        <strong>등록된 ${materialPageConfig[pageKey].category} 자재승인 데이터가 없습니다.</strong>
+        <p>엑셀 업로드 후 자재명, 업체명, 공종, 승인일과 상태가 표시됩니다.</p>
+      </article>
+    `;
+    return;
+  }
+
+  target.innerHTML = rows.map(item => `
+    <article class="data-item">
+      <h3>${escapeHtml(item.materialName || "자재명 미입력")}</h3>
+      <div class="data-fields">
+        ${dataField("No.", item.no)}
+        ${dataField("업체명", item.companyName)}
+        ${dataField("공종", item.trade)}
+        ${dataField("제출일", item.submitDate)}
+        ${dataField("승인일", item.approvalDate)}
+        ${dataField("상태", item.status)}
+        ${dataField("비고", item.note)}
+      </div>
+      ${actionButtons(pageKey, item.id)}
     </article>
   `).join("");
 }
@@ -1698,6 +1957,31 @@ function editConcretePourRecord(id) {
   showToast("콘크리트 타설현황이 수정되었습니다.");
 }
 
+function editMaterialApprovalRecord(pageKey, id) {
+  const item = (materialApprovalData[pageKey] || []).find(record => record.id === id);
+  if (!item) return;
+  const fields = [
+    ["no", "No."],
+    ["materialName", "자재명"],
+    ["companyName", "업체명"],
+    ["trade", "공종"],
+    ["submitDate", "제출일"],
+    ["approvalDate", "승인일"],
+    ["status", "상태"],
+    ["note", "비고"]
+  ];
+  const updated = { ...item };
+  for (const [key, label] of fields) {
+    const value = prompt(`${label} 수정`, updated[key] || "");
+    if (value === null) return;
+    updated[key] = value.trim();
+  }
+  writeMaterialApprovalData(pageKey, readMaterialApprovalData(pageKey).map(row => row.id === id ? normalizeMaterialApprovalRecord(updated, pageKey) : row));
+  refreshMaterialApprovalViews(pageKey);
+  postDataMutationToGoogleSheets(materialPageConfig[pageKey].postType, "update", updated).catch(error => console.warn("Google Sheets 수정 연동 실패", error));
+  showToast("자재승인 데이터가 수정되었습니다.");
+}
+
 function deleteDataRecord(type, id) {
   if (!confirm("정말 삭제하시겠습니까?")) return;
   let deleted = null;
@@ -1716,9 +2000,16 @@ function deleteDataRecord(type, id) {
     refreshConcretePourViews();
   }
 
+  if (materialPageConfig[type]) {
+    const rows = readMaterialApprovalData(type);
+    deleted = rows.find(item => item.id === id);
+    writeMaterialApprovalData(type, rows.filter(item => item.id !== id));
+    refreshMaterialApprovalViews(type);
+  }
+
   if (!deleted) return;
   lastDeletedEntry = { type, item: deleted };
-  postDataMutationToGoogleSheets(type, "delete", { id }).catch(error => console.warn("Google Sheets 삭제 연동 실패", error));
+  postDataMutationToGoogleSheets(materialPageConfig[type]?.postType || type, "delete", { id }).catch(error => console.warn("Google Sheets 삭제 연동 실패", error));
   showUndoToast("삭제되었습니다.");
 }
 
@@ -1729,6 +2020,7 @@ function handleListAction(event) {
     const { editType, editId } = editButton.dataset;
     if (editType === "compression") editCompressionRecord(editId);
     if (editType === "concretePour") editConcretePourRecord(editId);
+    if (materialPageConfig[editType]) editMaterialApprovalRecord(editType, editId);
   }
   if (deleteButton) {
     deleteDataRecord(deleteButton.dataset.deleteType, deleteButton.dataset.deleteId);
@@ -1802,6 +2094,74 @@ async function saveConcretePourExcelRows() {
   }
 }
 
+async function handleMaterialApprovalExcelUpload(pageKey, file) {
+  if (!file) return;
+  if (!/\.xlsx$/i.test(file.name)) {
+    showToast(".xlsx 파일만 업로드할 수 있습니다.");
+    return;
+  }
+  if (!window.XLSX) {
+    showToast("엑셀 파서 로딩 실패, 잠시 후 다시 시도해주세요.");
+    return;
+  }
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const workbook = window.XLSX.read(buffer, { type: "array", cellDates: false });
+    const rows = parseMaterialApprovalRowsFromSheet(workbook, pageKey);
+    renderMaterialApprovalPreviewRows(pageKey, rows);
+    showToast(`${materialPageConfig[pageKey].category} 자재승인 ${rows.length}건을 읽었습니다. 확인 후 저장하세요.`);
+  } catch (error) {
+    console.warn("자재승인 엑셀 업로드 실패", error);
+    showToast("자재승인 엑셀 업로드 실패, 시트명과 양식을 확인해주세요.");
+  }
+}
+
+async function saveMaterialApprovalExcelRows(pageKey) {
+  const rows = getMaterialApprovalPreviewRows(pageKey).map((row, index) => normalizeMaterialApprovalRecord({
+    ...row,
+    id: row.id || `material-excel-${pageKey}-${Date.now()}-${index}`,
+    createdAt: new Date().toISOString()
+  }, pageKey));
+  if (!rows.length) {
+    showToast("저장할 자재승인 데이터가 없습니다.");
+    return;
+  }
+
+  const existingRows = readMaterialApprovalData(pageKey);
+  const existingKeys = new Set(existingRows.map(makeMaterialDuplicateKey));
+  const newRows = [];
+  const duplicateRows = [];
+  rows.forEach(row => {
+    const key = makeMaterialDuplicateKey(row);
+    if (existingKeys.has(key)) {
+      duplicateRows.push(row);
+      return;
+    }
+    existingKeys.add(key);
+    newRows.push(row);
+  });
+
+  if (newRows.length) {
+    writeMaterialApprovalData(pageKey, newRows.concat(existingRows));
+  }
+  refreshMaterialApprovalViews(pageKey);
+  renderMaterialApprovalPreviewRows(pageKey, []);
+  setTab(pageKey);
+
+  try {
+    if (newRows.length) {
+      const googleResult = await postMaterialApprovalDataToGoogleSheets(pageKey, newRows);
+      showToast(`${googleResult.skipped ? "자재승인 저장 완료" : "Google Sheets 저장 완료"} · 신규 ${newRows.length}건 / 중복 제외 ${duplicateRows.length}건`);
+    } else {
+      showToast(`신규 0건 / 중복 제외 ${duplicateRows.length}건`);
+    }
+  } catch (error) {
+    console.warn("Google Sheets 자재승인 저장 실패 / 로컬 저장만 완료", error);
+    showToast(`Google Sheets 저장 실패 / 로컬 저장만 완료 · 신규 ${newRows.length}건 / 중복 제외 ${duplicateRows.length}건`);
+  }
+}
+
 function setTab(tab) {
   document.querySelectorAll(".tab-view").forEach(view => {
     view.classList.toggle("active", view.id === `tab-${tab}`);
@@ -1837,9 +2197,11 @@ function restoreLastDeletedEntry() {
   const { type, item, items } = lastDeletedEntry;
   if (type === "compression") writeCompressionStrengthData((items || [item]).concat(readCompressionStrengthData()));
   if (type === "concretePour") writeConcretePourData((items || [item]).concat(readConcretePourData()));
+  if (materialPageConfig[type]) writeMaterialApprovalData(type, (items || [item]).concat(readMaterialApprovalData(type)));
   refreshCompressionViews();
   refreshConcretePourViews();
-  postDataMutationToGoogleSheets(type, "update", item).catch(error => console.warn("Google Sheets Undo 연동 실패", error));
+  if (materialPageConfig[type]) refreshMaterialApprovalViews(type);
+  postDataMutationToGoogleSheets(materialPageConfig[type]?.postType || type, "update", items || item).catch(error => console.warn("Google Sheets Undo 연동 실패", error));
   lastDeletedEntry = null;
   clearTimeout(undoTimer);
   showToast("삭제를 취소했습니다.");
@@ -1863,7 +2225,15 @@ function clearAllData(type) {
     lastDeletedEntry = { type, items: rows };
     refreshConcretePourViews();
   }
-  postDataMutationToGoogleSheets(type, "delete", { all: true }).catch(error => console.warn("Google Sheets 전체삭제 연동 실패", error));
+  if (materialPageConfig[type]) {
+    const rows = readMaterialApprovalData(type);
+    if (!rows.length) return showToast("삭제할 자재승인 데이터가 없습니다.");
+    localStorage.removeItem(mobilePortalConfig.materialStorageKeys[type]);
+    materialApprovalData[type] = [];
+    lastDeletedEntry = { type, items: rows };
+    refreshMaterialApprovalViews(type);
+  }
+  postDataMutationToGoogleSheets(materialPageConfig[type]?.postType || type, "delete", { all: true }).catch(error => console.warn("Google Sheets 전체삭제 연동 실패", error));
   showUndoToast("전체 데이터가 삭제되었습니다.");
 }
 
@@ -1879,12 +2249,16 @@ function setupMobilePortal() {
   photoRegisterData = readPhotoRegisterData();
   compressionStrengthData = readCompressionStrengthData();
   concretePourData = readConcretePourData();
+  Object.keys(materialPageConfig).forEach(pageKey => {
+    materialApprovalData[pageKey] = readMaterialApprovalData(pageKey);
+  });
   renderDashboardCards();
   renderMetricCards("concretePourSummaryCards", getConcretePourSummaryCards());
   renderMetricCards("compressionSummaryCards", getCompressionSummaryCards());
   renderMetricCards("mobileKpiCards", getMobileKpiCards());
   renderCompressionList();
   renderConcretePourList();
+  refreshAllMaterialApprovalViews();
   renderStatusList();
   setDefaultDate();
   setEntryType(selectedEntryType);
@@ -1917,6 +2291,15 @@ function setupMobilePortal() {
   disableNativeValidation(mobileInputForm);
   document.getElementById("compressionList")?.addEventListener("click", handleListAction);
   document.getElementById("concretePourList")?.addEventListener("click", handleListAction);
+  Object.keys(materialPageConfig).forEach(pageKey => {
+    document.getElementById(`${pageKey}List`)?.addEventListener("click", handleListAction);
+    document.getElementById(`${pageKey}ExcelInput`)?.addEventListener("change", event => {
+      handleMaterialApprovalExcelUpload(pageKey, event.currentTarget.files?.[0]);
+      event.currentTarget.value = "";
+    });
+    document.getElementById(`${pageKey}SaveButton`)?.addEventListener("click", () => saveMaterialApprovalExcelRows(pageKey));
+    document.getElementById(`${pageKey}ClearButton`)?.addEventListener("click", () => clearAllData(pageKey));
+  });
   document.getElementById("concretePourExcelInput")?.addEventListener("change", event => {
     handleConcretePourExcelUpload(event.currentTarget.files?.[0]);
     event.currentTarget.value = "";
@@ -2007,6 +2390,9 @@ function setupMobilePortal() {
   window.addEventListener("storage", event => {
     if (event.key === mobilePortalConfig.compressionStorageKey) refreshCompressionViews();
     if (event.key === mobilePortalConfig.concretePourStorageKey) refreshConcretePourViews();
+    Object.entries(mobilePortalConfig.materialStorageKeys).forEach(([pageKey, key]) => {
+      if (event.key === key) refreshMaterialApprovalViews(pageKey);
+    });
   });
 }
 
@@ -2032,7 +2418,9 @@ window.mobileQualityPortalStore = {
   countCompressionResults,
   readConcretePourData,
   writeConcretePourData,
-  parseConcretePourRows
+  parseConcretePourRows,
+  readMaterialApprovalData,
+  writeMaterialApprovalData
 };
 
 document.addEventListener("DOMContentLoaded", setupMobilePortal);
