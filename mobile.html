@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./mobile.css?v=20260604-cleanup3">
+  <link rel="stylesheet" href="./mobile.css?v=20260604-material-approval1">
 </head>
 <body>
   <main class="mobile-shell">
@@ -105,11 +105,14 @@
         <p>ARCHITECTURE MATERIAL APPROVAL</p>
         <h2>자재승인(건축)</h2>
       </div>
-      <div class="metric-grid">
-        <article class="metric-card"><h3>승인건수</h3><div class="metric-value"><strong>0</strong>건</div><div class="metric-foot">등록된 데이터 없음</div></article>
-        <article class="metric-card"><h3>승인대기건수</h3><div class="metric-value"><strong>0</strong>건</div><div class="metric-foot">등록된 데이터 없음</div></article>
+      <div class="action-panel">
+        <label class="action-button" style="cursor:pointer;"><span>XLSX</span><strong>엑셀 업로드</strong><input id="materialArchExcelInput" type="file" accept=".xlsx" style="display:none;"></label>
+        <button class="action-button" type="button" id="materialArchSaveButton"><span>저장</span><strong>건축 자재승인 저장</strong></button>
+        <button class="action-button" type="button" id="materialArchClearButton"><span>삭제</span><strong>전부삭제</strong></button>
       </div>
-      <article class="data-empty"><strong>등록된 건축 자재승인 데이터가 없습니다.</strong><p>착공 후 자재명, 규격, 제조사, 승인상태가 표시됩니다.</p></article>
+      <div class="ocr-table-wrap material-preview-wrap"><table class="ocr-preview-table"><thead><tr><th>No.</th><th>자재명</th><th>업체명</th><th>공종</th><th>제출일</th><th>승인일</th><th>상태</th><th>비고</th></tr></thead><tbody id="materialArchPreviewBody"><tr><td colspan="8">엑셀 업로드 후 저장 전 미리보기가 표시됩니다.</td></tr></tbody></table></div>
+      <div class="metric-grid" id="materialArchSummaryCards"></div>
+      <div class="data-list" id="materialArchList"></div>
     </section>
 
     <section class="tab-view" id="tab-materialCivil">
@@ -117,11 +120,14 @@
         <p>CIVIL MATERIAL APPROVAL</p>
         <h2>자재승인(토목)</h2>
       </div>
-      <div class="metric-grid">
-        <article class="metric-card"><h3>승인건수</h3><div class="metric-value"><strong>0</strong>건</div><div class="metric-foot">등록된 데이터 없음</div></article>
-        <article class="metric-card"><h3>승인대기건수</h3><div class="metric-value"><strong>0</strong>건</div><div class="metric-foot">등록된 데이터 없음</div></article>
+      <div class="action-panel">
+        <label class="action-button" style="cursor:pointer;"><span>XLSX</span><strong>엑셀 업로드</strong><input id="materialCivilExcelInput" type="file" accept=".xlsx" style="display:none;"></label>
+        <button class="action-button" type="button" id="materialCivilSaveButton"><span>저장</span><strong>토목 자재승인 저장</strong></button>
+        <button class="action-button" type="button" id="materialCivilClearButton"><span>삭제</span><strong>전부삭제</strong></button>
       </div>
-      <article class="data-empty"><strong>등록된 토목 자재승인 데이터가 없습니다.</strong><p>착공 후 자재명, 규격, 제조사, 승인상태가 표시됩니다.</p></article>
+      <div class="ocr-table-wrap material-preview-wrap"><table class="ocr-preview-table"><thead><tr><th>No.</th><th>자재명</th><th>업체명</th><th>공종</th><th>제출일</th><th>승인일</th><th>상태</th><th>비고</th></tr></thead><tbody id="materialCivilPreviewBody"><tr><td colspan="8">엑셀 업로드 후 저장 전 미리보기가 표시됩니다.</td></tr></tbody></table></div>
+      <div class="metric-grid" id="materialCivilSummaryCards"></div>
+      <div class="data-list" id="materialCivilList"></div>
     </section>
 
     <section class="tab-view" id="tab-materialLandscape">
@@ -129,11 +135,14 @@
         <p>LANDSCAPE MATERIAL APPROVAL</p>
         <h2>자재승인(조경)</h2>
       </div>
-      <div class="metric-grid">
-        <article class="metric-card"><h3>승인건수</h3><div class="metric-value"><strong>0</strong>건</div><div class="metric-foot">등록된 데이터 없음</div></article>
-        <article class="metric-card"><h3>승인대기건수</h3><div class="metric-value"><strong>0</strong>건</div><div class="metric-foot">등록된 데이터 없음</div></article>
+      <div class="action-panel">
+        <label class="action-button" style="cursor:pointer;"><span>XLSX</span><strong>엑셀 업로드</strong><input id="materialLandscapeExcelInput" type="file" accept=".xlsx" style="display:none;"></label>
+        <button class="action-button" type="button" id="materialLandscapeSaveButton"><span>저장</span><strong>조경 자재승인 저장</strong></button>
+        <button class="action-button" type="button" id="materialLandscapeClearButton"><span>삭제</span><strong>전부삭제</strong></button>
       </div>
-      <article class="data-empty"><strong>등록된 조경 자재승인 데이터가 없습니다.</strong><p>착공 후 자재명, 규격, 제조사, 승인상태가 표시됩니다.</p></article>
+      <div class="ocr-table-wrap material-preview-wrap"><table class="ocr-preview-table"><thead><tr><th>No.</th><th>자재명</th><th>업체명</th><th>공종</th><th>제출일</th><th>승인일</th><th>상태</th><th>비고</th></tr></thead><tbody id="materialLandscapePreviewBody"><tr><td colspan="8">엑셀 업로드 후 저장 전 미리보기가 표시됩니다.</td></tr></tbody></table></div>
+      <div class="metric-grid" id="materialLandscapeSummaryCards"></div>
+      <div class="data-list" id="materialLandscapeList"></div>
     </section>
 
     <section class="tab-view" id="tab-compression">
@@ -269,7 +278,7 @@
   <div class="mobile-toast" id="mobileToast" role="status" aria-live="polite"></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/6.0.1/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="./config.js?v=20260604-cleanup3"></script>
-  <script src="./mobile.js?v=20260604-cleanup3"></script>
+  <script src="./config.js?v=20260604-material-approval1"></script>
+  <script src="./mobile.js?v=20260604-material-approval1"></script>
 </body>
 </html>
